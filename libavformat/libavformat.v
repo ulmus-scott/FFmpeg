@@ -6,9 +6,9 @@ LIBAVFORMAT_MAJOR {
         ffurl_seek;
         ffurl_size;
         ffurl_protocol_next;
-        url_open;
-        url_close;
-        url_write;
+        ffurl_open;
+        ffurl_close;
+        ffurl_write;
         url_*;
         ff_timefilter_destroy;
         ff_timefilter_new;

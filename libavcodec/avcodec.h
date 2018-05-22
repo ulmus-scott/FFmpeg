@@ -666,6 +666,13 @@ enum AVCodecID {
     AV_CODEC_ID_ASS,
     AV_CODEC_ID_HDMV_TEXT_SUBTITLE,
 
+    /* teletext codecs */
+    AV_CODEC_ID_MPEG2VBI,
+    AV_CODEC_ID_DVB_VBI,
+
+    /* DSMCC codec */
+    AV_CODEC_ID_DSMCC_B,
+
     /* other specific kind of codecs (generally used for attachments) */
     AV_CODEC_ID_FIRST_UNKNOWN = 0x18000,           ///< A dummy ID pointing at the start of various fake codecs.
     AV_CODEC_ID_TTF = 0x18000,
@@ -2343,6 +2350,15 @@ typedef struct AVCodecContext {
     attribute_deprecated
     int refcounted_frames;
 
+    /**
+     * set when bilingual audio data has been detected.
+     * 0 normally, 1 if dual language flag is set
+     *
+     * - encoding: unused (called delay in this case...)
+     * - decoding: set by lavc
+     */
+    int avcodec_dual_language;
+
     /* - encoding parameters */
     float qcompress;  ///< amount of qscale change between easy & hard scenes (0.0-1.0)
     float qblur;      ///< amount of qscale smoothing over time (0.0-1.0)
@@ -3828,6 +3844,10 @@ typedef struct AVSubtitleRect {
     int w;         ///< width            of pict, undefined when pict is not set
     int h;         ///< height           of pict, undefined when pict is not set
     int nb_colors; ///< number of colors in pict, undefined when pict is not set
+    int display_x; ///< top left corner of region into which pict is displayed
+    int display_y; ///< top left corner of region into which pict is displayed
+    int display_w; ///< width           of region into which pict is displayed
+    int display_h; ///< height          of region into which pict is displayed
 
 #if FF_API_AVPICTURE
     /**
@@ -3864,6 +3884,7 @@ typedef struct AVSubtitle {
     unsigned num_rects;
     AVSubtitleRect **rects;
     int64_t pts;    ///< Same as packet pts, in AV_TIME_BASE
+    int forced;
 } AVSubtitle;
 
 /**
@@ -6127,6 +6148,10 @@ const AVCodecDescriptor *avcodec_descriptor_next(const AVCodecDescriptor *prev);
  *         exists.
  */
 const AVCodecDescriptor *avcodec_descriptor_get_by_name(const char *name);
+
+const char *ff_codec_id_string(enum AVCodecID codec_id);
+const char *ff_codec_type_string(enum AVMediaType codec_type);
+const uint8_t *avpriv_find_start_code(const uint8_t *p, const uint8_t *end, uint32_t *state);
 
 /**
  * Allocate a CPB properties structure and initialize its fields to default

@@ -48,7 +48,7 @@
 #include "rtpenc_chain.h"
 #include "url.h"
 #include "rtpenc.h"
-#include "mpegts.h"
+#include "mpegts-mythtv.h"
 
 /* Timeout values for socket poll, in ms,
  * and read_packet(), in seconds  */

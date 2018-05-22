@@ -50,6 +50,7 @@ OBJS = ac3_parser.o                                                     \
        utils.o                                                          \
        vorbis_parser.o                                                  \
        xiph.o                                                           \
+       utils-mythtv.o                                                   \
 
 # subsystems
 OBJS-$(CONFIG_AANDCTTABLES)            += aandcttab.o

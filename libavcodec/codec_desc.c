@@ -3103,6 +3103,18 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .long_name = NULL_IF_CONFIG_SMALL("DVD Nav packet"),
     },
     {
+        .id        = AV_CODEC_ID_DSMCC_B,
+        .type      = AVMEDIA_TYPE_DATA,
+        .name      = "dsmcc_b",
+        .long_name = NULL_IF_CONFIG_SMALL("DSMCC B"),
+    },
+    {
+        .id        = AV_CODEC_ID_DVD_NAV,
+        .type      = AVMEDIA_TYPE_DATA,
+        .name      = "dvd_nav_packet",
+        .long_name = NULL_IF_CONFIG_SMALL("DVD Nav packet"),
+    },
+    {
         .id        = AV_CODEC_ID_TIMED_ID3,
         .type      = AVMEDIA_TYPE_DATA,
         .name      = "timed_id3",

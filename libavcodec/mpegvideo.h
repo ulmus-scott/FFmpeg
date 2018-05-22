@@ -79,7 +79,7 @@
  * MpegEncContext.
  */
 typedef struct MpegEncContext {
-    AVClass *class;
+    AVClass *clss;
 
     int y_dc_scale, c_dc_scale;
     int ac_pred;
@@ -253,8 +253,8 @@ typedef struct MpegEncContext {
     int16_t (*b_direct_mv_table)[2];     ///< MV table (1MV per MB) direct mode B-frame encoding
     int16_t (*p_field_mv_table[2][2])[2];   ///< MV table (2MV per MB) interlaced P-frame encoding
     int16_t (*b_field_mv_table[2][2][2])[2];///< MV table (4MV per MB) interlaced B-frame encoding
-    uint8_t (*p_field_select_table[2]);
-    uint8_t (*b_field_select_table[2][2]);
+    uint8_t *p_field_select_table[2];
+    uint8_t *b_field_select_table[2][2];
     int motion_est;                      ///< ME algorithm
     int me_penalty_compensation;
     int me_pre;                          ///< prepass for motion estimation
@@ -498,6 +498,15 @@ typedef struct MpegEncContext {
 
     char *tc_opt_str;        ///< timecode option string
     AVTimecode tc;           ///< timecode context
+
+#define ATSC_CC_BUF_SIZE 1024
+    /// Used to hold cached user_data about caption packets before the
+    /// frame for these packets has been created in MPV_frame_start().
+    uint8_t tmp_atsc_cc_buf[ATSC_CC_BUF_SIZE];
+    int     tmp_atsc_cc_len;
+#define SCTE_CC_BUF_SIZE 1024
+    uint8_t tmp_scte_cc_buf[SCTE_CC_BUF_SIZE];
+    int     tmp_scte_cc_len;
 
     uint8_t *ptr_lastgob;
     int swap_uv;             //vcr2 codec is an MPEG-2 variant with U and V swapped

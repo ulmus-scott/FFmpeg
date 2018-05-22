@@ -58,6 +58,15 @@ const char av_format_ffversion[] = "FFmpeg version " FFMPEG_VERSION;
 
 static AVMutex avformat_mutex = AV_MUTEX_INITIALIZER;
 
+/* MYTHTV CHANGES */
+extern AVInputFormat ff_mythtv_mpegts_demuxer;
+extern AVInputFormat ff_mythtv_mpegtsraw_demuxer;
+extern AVInputFormat ff_mpegts_demuxer;
+extern AVInputFormat ff_mpegtsraw_demuxer;
+
+/* END MYTHTV CHANGES */
+
+
 /**
  * @file
  * various utility functions for use within FFmpeg
@@ -606,6 +615,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
         }
     }
 
+    s->build_index = 1;
     s->duration = s->start_time = AV_NOPTS_VALUE;
 
     /* Allocate private data. */
@@ -891,6 +901,9 @@ int ff_read_packet(AVFormatContext *s, AVPacket *pkt)
         }
 
         st = s->streams[pkt->stream_index];
+        
+        if (!st)
+            return -1;
 
         if (update_wrap_reference(s, st, pkt->stream_index, pkt) && st->pts_wrap_behavior == AV_PTS_WRAP_SUB_OFFSET) {
             // correct first time stamps to negative values
@@ -961,6 +974,10 @@ FF_ENABLE_DEPRECATION_WARNINGS
 
     *pnum = 0;
     *pden = 0;
+
+    if (!st || !st->codecpar)
+        return;
+    
     switch (st->codecpar->codec_type) {
     case AVMEDIA_TYPE_VIDEO:
         if (st->r_frame_rate.num && !pc && s->iformat) {
@@ -1126,6 +1143,9 @@ static void update_initial_timestamps(AVFormatContext *s, int stream_index,
 
     uint64_t shift;
 
+    if (!st)
+        return;
+
     if (st->first_dts != AV_NOPTS_VALUE ||
         dts           == AV_NOPTS_VALUE ||
         st->cur_dts   == AV_NOPTS_VALUE ||
@@ -1189,6 +1209,7 @@ static void update_initial_durations(AVFormatContext *s, AVStream *st,
                 cur_dts -= duration;
             }
         }
+#if 0 // Very verbose: ffmpeg ticket 1344
         if (pktl && pktl->pkt.dts != st->first_dts) {
             av_log(s, AV_LOG_DEBUG, "first_dts %s not matching first dts %s (pts %s, duration %"PRId64") in the queue\n",
                    av_ts2str(st->first_dts), av_ts2str(pktl->pkt.dts), av_ts2str(pktl->pkt.pts), pktl->pkt.duration);
@@ -1198,6 +1219,7 @@ static void update_initial_durations(AVFormatContext *s, AVStream *st,
             av_log(s, AV_LOG_DEBUG, "first_dts %s but no packet with dts in the queue\n", av_ts2str(st->first_dts));
             return;
         }
+#endif
         pktl          = s->internal->packet_buffer ? s->internal->packet_buffer : s->internal->parse_queue;
         st->first_dts = cur_dts;
     } else if (st->cur_dts != RELATIVE_TS_BASE)
@@ -1566,6 +1588,11 @@ static int64_t ts_to_samples(AVStream *st, int64_t ts)
     return av_rescale(ts, st->time_base.num * st->codecpar->sample_rate, st->time_base.den);
 }
 
+/**
+ * Simply sets data pointer to null.
+ *
+ * This will leak memory if no one else frees the memory used by the packet.
+ */
 static int read_frame_internal(AVFormatContext *s, AVPacket *pkt)
 {
     int ret = 0, i, got_packet = 0;
@@ -1577,6 +1604,8 @@ static int read_frame_internal(AVFormatContext *s, AVPacket *pkt)
         AVStream *st;
         AVPacket cur_pkt;
 
+        av_init_packet(&cur_pkt);
+
         /* read next packet */
         ret = ff_read_packet(s, &cur_pkt);
         if (ret < 0) {
@@ -1585,7 +1614,7 @@ static int read_frame_internal(AVFormatContext *s, AVPacket *pkt)
             /* flush the parsers */
             for (i = 0; i < s->nb_streams; i++) {
                 st = s->streams[i];
-                if (st->parser && st->need_parsing)
+                if (st && st->codec && st->parser && st->need_parsing)
                     parse_packet(s, NULL, st->index);
             }
             /* all remaining packets are now in parse_queue =>
@@ -1643,7 +1672,8 @@ FF_ENABLE_DEPRECATION_WARNINGS
                    av_ts2str(cur_pkt.dts),
                    cur_pkt.size, cur_pkt.duration, cur_pkt.flags);
 
-        if (st->need_parsing && !st->parser && !(s->flags & AVFMT_FLAG_NOPARSE)) {
+        if (st && st->codecpar && st->need_parsing && !st->parser &&
+            !(s->flags & AVFMT_FLAG_NOPARSE)) {
             st->parser = av_parser_init(st->codecpar->codec_id);
             if (!st->parser) {
                 av_log(s, AV_LOG_VERBOSE, "parser not found for codec "
@@ -1663,6 +1693,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
             /* no parsing needed: we just output the packet as is */
             *pkt = cur_pkt;
             compute_pkt_fields(s, st, NULL, pkt, AV_NOPTS_VALUE, AV_NOPTS_VALUE);
+            st->got_frame = 0;
             if ((s->iformat->flags & AVFMT_GENERIC_INDEX) &&
                 (pkt->flags & AV_PKT_FLAG_KEY) && pkt->dts != AV_NOPTS_VALUE) {
                 ff_reduce_index(s, st->index);
@@ -1862,7 +1893,7 @@ return_packet:
 }
 
 /* XXX: suppress the packet queue */
-static void flush_packet_queue(AVFormatContext *s)
+void flush_packet_queue(AVFormatContext *s)
 {
     if (!s->internal)
         return;
@@ -1876,6 +1907,9 @@ static void flush_packet_queue(AVFormatContext *s)
 /*******************************************************/
 /* seek support */
 
+/**
+ * @brief Finds the index of the first video stream within the AVFormatContext.
+ */
 int av_find_default_stream_index(AVFormatContext *s)
 {
     int i;
@@ -1929,6 +1963,7 @@ void ff_read_frame_flush(AVFormatContext *s)
             av_parser_close(st->parser);
             st->parser = NULL;
         }
+        st->got_frame = 0;
         st->last_IP_pts = AV_NOPTS_VALUE;
         st->last_dts_for_order_check = AV_NOPTS_VALUE;
         if (st->first_dts == AV_NOPTS_VALUE)
@@ -2781,10 +2816,15 @@ static void estimate_timings_from_bit_rate(AVFormatContext *ic)
                "Estimating duration from bitrate, this may be inaccurate\n");
 }
 
+/** Maximum number of bytes we read to determine timing from PTS stream. */
 #define DURATION_MAX_READ_SIZE 250000LL
 #define DURATION_MAX_RETRY 6
 
-/* only usable for MPEG-PS streams */
+/**
+ * @brief Estimates timings using PTS stream.
+ *
+ * only usable for MPEG-PS streams
+ */
 static void estimate_timings_from_pts(AVFormatContext *ic, int64_t old_offset)
 {
     AVPacket pkt1, *pkt = &pkt1;
@@ -2834,6 +2874,13 @@ static void estimate_timings_from_pts(AVFormatContext *ic, int64_t old_offset)
             if (ret != 0)
                 break;
             read_size += pkt->size;
+
+            if (pkt->stream_index >= ic->nb_streams)
+            {
+                av_free_packet(pkt);
+                continue;
+            }
+
             st         = ic->streams[pkt->stream_index];
             if (pkt->pts != AV_NOPTS_VALUE &&
                 (st->start_time != AV_NOPTS_VALUE ||
@@ -2911,7 +2958,15 @@ static void estimate_timings_from_pts(AVFormatContext *ic, int64_t old_offset)
     }
 }
 
-static void estimate_timings(AVFormatContext *ic, int64_t old_offset)
+/**
+ * @brief Attempts to estimate timings using whatever means possible.
+ *
+ * First, if the stream is an MPEG-PS stream we try to find the PTS stream.
+ * Then we try to get the timings form one of the A/V streams.
+ * Finally, we just guess at the timings based on the estimated bit rate.
+ *
+ */
+void estimate_timings(AVFormatContext *ic, int64_t old_offset)
 {
     int64_t file_size;
 
@@ -3556,6 +3611,12 @@ static int extract_extradata(AVStream *st, AVPacket *pkt)
     return 0;
 }
 
+/* absolute maximum size we read until we abort */
+#define MAX_READ_SIZE        5000000
+
+/** Number of frames to read, max. */
+#define MAX_FRAMES           45
+
 int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
 {
     int i, count = 0, ret = 0, j;
@@ -3589,6 +3650,10 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
         if (!strcmp(ic->iformat->name, "mpeg") || !strcmp(ic->iformat->name, "mpegts"))
             max_stream_analyze_duration = 7*AV_TIME_BASE;
     }
+
+    int hasaudio        = 0;
+    int hasvideo        = 0;
+    int read_packets    = 0;
 
     if (ic->pb)
         av_log(ic, AV_LOG_DEBUG, "Before avformat_find_stream_info() pos: %"PRId64" bytes read:%"PRId64" seeks:%d nb_streams:%d\n",
@@ -3672,11 +3737,14 @@ FF_ENABLE_DEPRECATION_WARNINGS
     }
 
     for (i = 0; i < ic->nb_streams; i++) {
+        if (ic->streams[i]->info )
+        {
 #if FF_API_R_FRAME_RATE
         ic->streams[i]->info->last_dts = AV_NOPTS_VALUE;
 #endif
         ic->streams[i]->info->fps_first_dts = AV_NOPTS_VALUE;
         ic->streams[i]->info->fps_last_dts  = AV_NOPTS_VALUE;
+        }
     }
 
     read_size = 0;
@@ -3728,9 +3796,12 @@ FF_ENABLE_DEPRECATION_WARNINGS
             if (st->first_dts == AV_NOPTS_VALUE &&
                 !(ic->iformat->flags & AVFMT_NOTIMESTAMPS) &&
                 st->codec_info_nb_frames < ((st->disposition & AV_DISPOSITION_ATTACHED_PIC) ? 1 : ic->max_ts_probe) &&
-                (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO ||
-                 st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO))
-                break;
+                st->codecpar->codec_id != AV_CODEC_ID_DSMCC_B)
+                 break;
+            if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+                hasvideo = 1;
+            else if (st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+                hasaudio = 1;
         }
         analyzed_all_streams = 0;
         if (!missing_streams || !*missing_streams)
@@ -3738,11 +3809,20 @@ FF_ENABLE_DEPRECATION_WARNINGS
             analyzed_all_streams = 1;
             /* NOTE: If the format has no header, then we need to read some
              * packets to get most of the streams, so we cannot stop here. */
-            if (!(ic->ctx_flags & AVFMTCTX_NOHEADER)) {
+            if (!(ic->ctx_flags & AVFMTCTX_NOHEADER) ||
+                (read_size >= MAX_READ_SIZE || read_packets >= MAX_FRAMES) ||
+                (hasvideo && hasaudio)) {
                 /* If we found the info for all the codecs, we can stop. */
                 ret = count;
                 av_log(ic, AV_LOG_DEBUG, "All info found\n");
                 flush_codecs = 0;
+                break;
+            }
+            /* Is this is an MHEG only stream? Then we really can stop. */
+            if (i == 1 && ic->streams[0]->codecpar->codec_id == AV_CODEC_ID_DSMCC_B)
+            {
+                ret = count;
+                av_log(ic, AV_LOG_DEBUG, "All DSM info found\n");
                 break;
             }
         }
@@ -3765,6 +3845,9 @@ FF_ENABLE_DEPRECATION_WARNINGS
         /* NOTE: A new stream can be added there if no header in file
          * (AVFMTCTX_NOHEADER). */
         ret = read_frame_internal(ic, &pkt1);
+
+        read_packets++;
+
         if (ret == AVERROR(EAGAIN))
             continue;
 

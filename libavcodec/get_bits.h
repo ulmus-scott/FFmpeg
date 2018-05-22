@@ -129,7 +129,11 @@ typedef struct GetBitContext {
 #define BITS_AVAILABLE(name, gb) name ## _index < name ## _size_plus8
 #endif
 
-#define CLOSE_READER(name, gb) (gb)->index = name ## _index
+// Added the void use of the cache to defeat compiler warnings with newer gcc
+// (warning: variable 're_cache" set but not used)
+#   define CLOSE_READER(name, gb) \
+    (gb)->index = name##_index;   \
+    (void)name##_cache
 
 # ifdef LONG_BITSTREAM_READER
 
@@ -225,8 +229,8 @@ static inline void skip_bits_long(GetBitContext *s, int n)
  */
 static inline int get_xbits(GetBitContext *s, int n)
 {
-    register int sign;
-    register int32_t cache;
+    int sign;
+    int32_t cache;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE(re, s);
@@ -239,8 +243,8 @@ static inline int get_xbits(GetBitContext *s, int n)
 
 static inline int get_xbits_le(GetBitContext *s, int n)
 {
-    register int sign;
-    register int32_t cache;
+    int sign;
+    int32_t cache;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE_LE(re, s);
@@ -253,7 +257,7 @@ static inline int get_xbits_le(GetBitContext *s, int n)
 
 static inline int get_sbits(GetBitContext *s, int n)
 {
-    register int tmp;
+    int tmp;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE(re, s);
@@ -268,7 +272,7 @@ static inline int get_sbits(GetBitContext *s, int n)
  */
 static inline unsigned int get_bits(GetBitContext *s, int n)
 {
-    register int tmp;
+    int tmp;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE(re, s);
@@ -288,7 +292,7 @@ static av_always_inline int get_bitsz(GetBitContext *s, int n)
 
 static inline unsigned int get_bits_le(GetBitContext *s, int n)
 {
-    register int tmp;
+    int tmp;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE_LE(re, s);
@@ -303,7 +307,7 @@ static inline unsigned int get_bits_le(GetBitContext *s, int n)
  */
 static inline unsigned int show_bits(GetBitContext *s, int n)
 {
-    register int tmp;
+    int tmp;
     OPEN_READER_NOSIZE(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE(re, s);

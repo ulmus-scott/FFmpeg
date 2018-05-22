@@ -1368,6 +1368,15 @@ typedef struct AVCodecContext {
     int refcounted_frames;
 #endif
 
+    /**
+     * set when bilingual audio data has been detected.
+     * 0 normally, 1 if dual language flag is set
+     *
+     * - encoding: unused (called delay in this case...)
+     * - decoding: set by lavc
+     */
+    int avcodec_dual_language;
+
     /* - encoding parameters */
     float qcompress;  ///< amount of qscale change between easy & hard scenes (0.0-1.0)
     float qblur;      ///< amount of qscale smoothing over time (0.0-1.0)
@@ -2690,6 +2699,10 @@ typedef struct AVSubtitleRect {
     int w;         ///< width            of pict, undefined when pict is not set
     int h;         ///< height           of pict, undefined when pict is not set
     int nb_colors; ///< number of colors in pict, undefined when pict is not set
+    int display_x; ///< top left corner of region into which pict is displayed
+    int display_y; ///< top left corner of region into which pict is displayed
+    int display_w; ///< width           of region into which pict is displayed
+    int display_h; ///< height          of region into which pict is displayed
 
 #if FF_API_AVPICTURE
     /**
@@ -2726,6 +2739,7 @@ typedef struct AVSubtitle {
     unsigned num_rects;
     AVSubtitleRect **rects;
     int64_t pts;    ///< Same as packet pts, in AV_TIME_BASE
+    int forced;
 } AVSubtitle;
 
 #if FF_API_NEXT
@@ -4165,6 +4179,13 @@ int av_lockmgr_register(int (*cb)(void **mutex, enum AVLockOp op));
  * with no corresponding avcodec_close()), 0 otherwise.
  */
 int avcodec_is_open(AVCodecContext *s);
+
+
+/* MythTV */
+const char *ff_codec_id_string(enum AVCodecID codec_id);
+const char *ff_codec_type_string(enum AVMediaType codec_type);
+const uint8_t *avpriv_find_start_code(const uint8_t *p, const uint8_t *end, uint32_t *state);
+
 
 /**
  * Allocate a CPB properties structure and initialize its fields to default

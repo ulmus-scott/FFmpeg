@@ -731,11 +731,6 @@ static int save_subtitle_set(AVCodecContext *avctx, AVSubtitle *sub, int *got_ou
     int ret = 0;
 
 
-    if (display_def) {
-        offset_x = display_def->x;
-        offset_y = display_def->y;
-    }
-
     /* Not touching AVSubtitles again*/
     if (sub->num_rects) {
         avpriv_request_sample(ctx, "Different Version of Segment asked Twice");
@@ -782,10 +777,20 @@ static int save_subtitle_set(AVCodecContext *avctx, AVSubtitle *sub, int *got_ou
                 continue;
 
             rect = sub->rects[i];
-            rect->x = display->x_pos + offset_x;
-            rect->y = display->y_pos + offset_y;
+            rect->x = display->x_pos;
+            rect->y = display->y_pos;
             rect->w = region->width;
             rect->h = region->height;
+            if (display_def) {
+                rect->display_x = display_def->x;
+                rect->display_y = display_def->y;
+                rect->display_w = display_def->width;
+                rect->display_h = display_def->height;
+            }
+            else {
+                rect->display_w = 720;
+                rect->display_h = 576;
+            }
             rect->nb_colors = (1 << region->depth);
             rect->type      = SUBTITLE_BITMAP;
             rect->linesize[0] = region->width;
@@ -925,6 +930,11 @@ static void dvbsub_parse_pixel_data_block(AVCodecContext *avctx, DVBSubObjectDis
             else
                 map_table = NULL;
 
+            if (y_pos >= region->height) {
+                av_log(avctx, AV_LOG_ERROR, "Invalid y position!\n");
+                return;
+            }
+
             x_pos = dvbsub_read_2bit_string(avctx, pbuf + (y_pos * region->width),
                                             region->width, &buf, buf_end - buf,
                                             non_mod, map_table, x_pos);
@@ -940,6 +950,11 @@ static void dvbsub_parse_pixel_data_block(AVCodecContext *avctx, DVBSubObjectDis
             else
                 map_table = NULL;
 
+            if (y_pos >= region->height) {
+                av_log(avctx, AV_LOG_ERROR, "Invalid y position!\n");
+                return;
+            }
+
             x_pos = dvbsub_read_4bit_string(avctx, pbuf + (y_pos * region->width),
                                             region->width, &buf, buf_end - buf,
                                             non_mod, map_table, x_pos);
@@ -947,6 +962,11 @@ static void dvbsub_parse_pixel_data_block(AVCodecContext *avctx, DVBSubObjectDis
         case 0x12:
             if (region->depth < 8) {
                 av_log(avctx, AV_LOG_ERROR, "8-bit pixel string in %d-bit region!\n", region->depth);
+                return;
+            }
+
+            if (y_pos >= region->height) {
+                av_log(avctx, AV_LOG_ERROR, "Invalid y position!\n");
                 return;
             }
 
@@ -1130,6 +1150,12 @@ static int dvbsub_parse_clut_segment(AVCodecContext *avctx,
                 ff_dlog(avctx, "More than one bit level marked: %x\n", depth);
                 if (avctx->strict_std_compliance > FF_COMPLIANCE_NORMAL)
                     return AVERROR_INVALIDDATA;
+            }
+
+            // MythTV added
+            if (alpha == 255)
+            {
+                r = g = b = 0;
             }
 
             if (depth & 0x80 && entry_id < 4)
@@ -1649,6 +1675,7 @@ static int dvbsub_decode(AVCodecContext *avctx,
     p = buf;
     p_end = buf + buf_size;
 
+    int gotpage, gotregion, gotclut, gotobject, gotdisplay = 0;
     while (p_end - p >= 6 && *p == 0x0f) {
         p += 1;
         segment_type = *p++;
@@ -1674,19 +1701,23 @@ static int dvbsub_decode(AVCodecContext *avctx,
             case DVBSUB_PAGE_SEGMENT:
                 ret = dvbsub_parse_page_segment(avctx, p, segment_length, sub, got_sub_ptr);
                 got_segment |= 1;
+                gotpage = 1;
                 break;
             case DVBSUB_REGION_SEGMENT:
                 ret = dvbsub_parse_region_segment(avctx, p, segment_length);
                 got_segment |= 2;
+                gotregion = 1;
                 break;
             case DVBSUB_CLUT_SEGMENT:
                 ret = dvbsub_parse_clut_segment(avctx, p, segment_length);
                 if (ret < 0) goto end;
                 got_segment |= 4;
+                gotclut = 1;
                 break;
             case DVBSUB_OBJECT_SEGMENT:
                 ret = dvbsub_parse_object_segment(avctx, p, segment_length);
                 got_segment |= 8;
+                gotobject = 1;
                 break;
             case DVBSUB_DISPLAYDEFINITION_SEGMENT:
                 ret = dvbsub_parse_display_definition_segment(avctx, p,
@@ -1701,6 +1732,7 @@ static int dvbsub_decode(AVCodecContext *avctx,
                     avctx->height = 576;
                 }
                 got_segment |= 16;
+                gotdisplay = 1;
                 break;
             default:
                 ff_dlog(avctx, "Subtitling segment type 0x%x, page id %d, length %d\n",
@@ -1719,6 +1751,11 @@ static int dvbsub_decode(AVCodecContext *avctx,
         av_log(avctx, AV_LOG_DEBUG, "Missing display_end_segment, emulating\n");
         dvbsub_display_end_segment(avctx, p, 0, sub, got_sub_ptr);
     }
+
+    // Some streams do not send a display segment but if we have all the other
+    // segments then we need no further data. see #9373
+    if ((gotpage & gotregion & gotclut & gotobject) && !gotdisplay && sub)
+        dvbsub_display_end_segment(avctx, p, 0, sub, data_size);
 
 end:
     if (ret < 0) {

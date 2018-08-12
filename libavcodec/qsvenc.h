@@ -45,7 +45,7 @@
 #define QSV_HAVE_LA_DS  QSV_VERSION_ATLEAST(1, 8)
 #define QSV_HAVE_LA_HRD QSV_VERSION_ATLEAST(1, 11)
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__CYGWIN__)
 #define QSV_HAVE_AVBR   QSV_VERSION_ATLEAST(1, 3)
 #define QSV_HAVE_ICQ    QSV_VERSION_ATLEAST(1, 8)
 #define QSV_HAVE_VCM    QSV_VERSION_ATLEAST(1, 8)
@@ -102,6 +102,8 @@ typedef struct QSVEncContext {
     int packet_size;
     int width_align;
     int height_align;
+
+    int sum_frame_qp;
 
     mfxVideoParam param;
     mfxFrameAllocRequest req;

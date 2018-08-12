@@ -30,6 +30,7 @@
 #include "riff.h"
 #include "avio.h"
 #include "isom.h"
+#include "av1.h"
 #include "avc.h"
 #include "libavcodec/ac3_parser_internal.h"
 #include "libavcodec/dnxhddata.h"
@@ -101,6 +102,7 @@ static const AVOption options[] = {
     { "write_prft", "Write producer reference time box with specified time source", offsetof(MOVMuxContext, write_prft), AV_OPT_TYPE_INT, {.i64 = MOV_PRFT_NONE}, 0, MOV_PRFT_NB-1, AV_OPT_FLAG_ENCODING_PARAM, "prft"},
     { "wallclock", NULL, 0, AV_OPT_TYPE_CONST, {.i64 = MOV_PRFT_SRC_WALLCLOCK}, 0, 0, AV_OPT_FLAG_ENCODING_PARAM, "prft"},
     { "pts", NULL, 0, AV_OPT_TYPE_CONST, {.i64 = MOV_PRFT_SRC_PTS}, 0, 0, AV_OPT_FLAG_ENCODING_PARAM, "prft"},
+    { "empty_hdlr_name", "write zero-length name string in hdlr atoms within mdia and minf atoms", offsetof(MOVMuxContext, empty_hdlr_name), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, AV_OPT_FLAG_ENCODING_PARAM},
     { NULL },
 };
 
@@ -400,7 +402,7 @@ static int handle_eac3(MOVMuxContext *mov, AVPacket *pkt, MOVTrack *track)
     if (avpriv_ac3_parse_header(&hdr, pkt->data, pkt->size) < 0) {
         /* drop the packets until we see a good one */
         if (!track->entry) {
-            av_log(mov, AV_LOG_WARNING, "Dropping invalid packet from start of the stream\n");
+            av_log(mov->fc, AV_LOG_WARNING, "Dropping invalid packet from start of the stream\n");
             ret = 0;
         } else
             ret = AVERROR_INVALIDDATA;
@@ -428,13 +430,19 @@ static int handle_eac3(MOVMuxContext *mov, AVPacket *pkt, MOVTrack *track)
 
             if (hdr->substreamid == info->num_ind_sub + 1) {
                 //info->num_ind_sub++;
-                avpriv_request_sample(track->par, "Multiple independent substreams");
+                avpriv_request_sample(mov->fc, "Multiple independent substreams");
                 ret = AVERROR_PATCHWELCOME;
                 goto end;
             } else if (hdr->substreamid < info->num_ind_sub ||
                        hdr->substreamid == 0 && info->substream[0].bsid) {
                 info->ec3_done = 1;
                 goto concatenate;
+            }
+        } else {
+            if (hdr->substreamid != 0) {
+                avpriv_request_sample(mov->fc, "Multiple non EAC3 independent substreams");
+                ret = AVERROR_PATCHWELCOME;
+                goto end;
             }
         }
 
@@ -1015,7 +1023,7 @@ static int mov_write_audio_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
     uint32_t tag = track->tag;
 
     if (track->mode == MODE_MOV) {
-        if (track->timescale > UINT16_MAX) {
+        if (track->timescale > UINT16_MAX || !track->par->channels) {
             if (mov_get_lpcm_flags(track->par->codec_id))
                 tag = AV_RL32("lpcm");
             version = 2;
@@ -1154,6 +1162,19 @@ static int mov_write_d263_tag(AVIOContext *pb)
     avio_w8(pb, 0xa); /* level */
     avio_w8(pb, 0); /* profile */
     return 0xf;
+}
+
+static int mov_write_av1c_tag(AVIOContext *pb, MOVTrack *track)
+{
+    int64_t pos = avio_tell(pb);
+
+    avio_wb32(pb, 0);
+    ffio_wfourcc(pb, "av1C");
+    avio_w8(pb, 0); /* version */
+    avio_wb24(pb, 0); /* flags */
+    avio_w8(pb, 0); /* reserved (3), initial_presentation_delay_present (1), initial_presentation_delay_minus_one/reserved (4) */
+    ff_isom_write_av1c(pb, track->vos_data, track->vos_len);
+    return update_size(pb, pos);
 }
 
 static int mov_write_avcc_tag(AVIOContext *pb, MOVTrack *track)
@@ -2002,6 +2023,8 @@ static int mov_write_video_tag(AVIOContext *pb, MOVMuxContext *mov, MOVTrack *tr
             mov_write_uuid_tag_ipod(pb);
     } else if (track->par->codec_id == AV_CODEC_ID_VP9) {
         mov_write_vpcc_tag(mov->fc, pb, track);
+    } else if (track->par->codec_id == AV_CODEC_ID_AV1) {
+        mov_write_av1c_tag(pb, track);
     } else if (track->par->codec_id == AV_CODEC_ID_VC1 && track->vos_len > 0)
         mov_write_dvc1_tag(pb, track);
     else if (track->par->codec_id == AV_CODEC_ID_VP6F ||
@@ -2551,6 +2574,7 @@ static int is_clcp_track(MOVTrack *track)
 
 static int mov_write_hdlr_tag(AVFormatContext *s, AVIOContext *pb, MOVTrack *track)
 {
+    MOVMuxContext *mov = s->priv_data;
     const char *hdlr, *descr = NULL, *hdlr_type = NULL;
     int64_t pos = avio_tell(pb);
 
@@ -2599,11 +2623,14 @@ static int mov_write_hdlr_tag(AVFormatContext *s, AVIOContext *pb, MOVTrack *tra
             // of the track. So if an alternate handler description is
             // specified, use it.
             AVDictionaryEntry *t;
-            t = av_dict_get(track->st->metadata, "handler", NULL, 0);
+            t = av_dict_get(track->st->metadata, "handler_name", NULL, 0);
             if (t && utf8len(t->value))
                 descr = t->value;
         }
     }
+
+    if (mov->empty_hdlr_name) /* expressly allowed by QTFF and not prohibited in ISO 14496-12 8.4.3.3 */
+        descr = "";
 
     avio_wb32(pb, 0); /* size */
     ffio_wfourcc(pb, "hdlr");
@@ -2663,7 +2690,7 @@ static int mov_write_minf_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContext
     } else if (track->tag == MKTAG('g','p','m','d')) {
         mov_write_gmhd_tag(pb, track);
     }
-    if (track->mode == MODE_MOV) /* FIXME: Why do it for MODE_MOV only ? */
+    if (track->mode == MODE_MOV) /* ISO 14496-12 8.4.3.1 specifies hdlr only within mdia or meta boxes */
         mov_write_hdlr_tag(s, pb, NULL);
     mov_write_dinf_tag(pb);
     if ((ret = mov_write_stbl_tag(s, pb, mov, track)) < 0)
@@ -5258,6 +5285,11 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
     else
         samples_in_chunk = 1;
 
+    if (samples_in_chunk < 1) {
+        av_log(s, AV_LOG_ERROR, "fatal error, input packet contains no samples\n");
+        return AVERROR_PATCHWELCOME;
+    }
+
     /* copy extradata if it exists */
     if (trk->vos_len == 0 && par->extradata_size > 0 &&
         !TAG_IS_AVCI(trk->tag) &&
@@ -5307,6 +5339,13 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
             avio_write(pb, reformatted_data, size);
         } else {
             size = ff_hevc_annexb2mp4(pb, pkt->data, pkt->size, 0, NULL);
+        }
+    } else if (par->codec_id == AV_CODEC_ID_AV1) {
+        if (trk->hint_track >= 0 && trk->hint_track < mov->nb_streams) {
+            ff_av1_filter_obus_buf(pkt->data, &reformatted_data, &size);
+            avio_write(pb, reformatted_data, size);
+        } else {
+            size = ff_av1_filter_obus(pb, pkt->data, pkt->size);
         }
 #if CONFIG_AC3_PARSER
     } else if (par->codec_id == AV_CODEC_ID_EAC3) {
@@ -5501,6 +5540,7 @@ static int mov_write_single_packet(AVFormatContext *s, AVPacket *pkt)
 
         if (trk->par->codec_id == AV_CODEC_ID_MP4ALS ||
             trk->par->codec_id == AV_CODEC_ID_AAC ||
+            trk->par->codec_id == AV_CODEC_ID_AV1 ||
             trk->par->codec_id == AV_CODEC_ID_FLAC) {
             int side_size = 0;
             uint8_t *side = av_packet_get_side_data(pkt, AV_PKT_DATA_NEW_EXTRADATA, &side_size);
@@ -6198,15 +6238,20 @@ static int mov_init(AVFormatContext *s)
                         pix_fmt == AV_PIX_FMT_MONOWHITE ||
                         pix_fmt == AV_PIX_FMT_MONOBLACK;
             }
-            if (track->par->codec_id == AV_CODEC_ID_VP9) {
+            if (track->par->codec_id == AV_CODEC_ID_VP9 ||
+                track->par->codec_id == AV_CODEC_ID_AV1) {
                 if (track->mode != MODE_MP4) {
-                    av_log(s, AV_LOG_ERROR, "VP9 only supported in MP4.\n");
+                    av_log(s, AV_LOG_ERROR, "%s only supported in MP4.\n", avcodec_get_name(track->par->codec_id));
                     return AVERROR(EINVAL);
                 }
-            } else if (track->par->codec_id == AV_CODEC_ID_AV1) {
-                /* spec is not finished, so forbid for now */
-                av_log(s, AV_LOG_ERROR, "AV1 muxing is currently not supported.\n");
-                return AVERROR_PATCHWELCOME;
+                if (track->par->codec_id == AV_CODEC_ID_AV1 &&
+                    s->strict_std_compliance > FF_COMPLIANCE_EXPERIMENTAL) {
+                    av_log(s, AV_LOG_ERROR,
+                           "av1 in MP4 support is experimental, add "
+                           "'-strict %d' if you want to use it.\n",
+                           FF_COMPLIANCE_EXPERIMENTAL);
+                    return AVERROR_EXPERIMENTAL;
+                }
             } else if (track->par->codec_id == AV_CODEC_ID_VP8) {
                 /* altref frames handling is not defined in the spec as of version v1.0,
                  * so just forbid muxing VP8 streams altogether until a new version does */
@@ -6721,6 +6766,7 @@ const AVCodecTag codec_mp4_tags[] = {
     { AV_CODEC_ID_DIRAC       , MKTAG('d', 'r', 'a', 'c') },
     { AV_CODEC_ID_TSCC2       , MKTAG('m', 'p', '4', 'v') },
     { AV_CODEC_ID_VP9         , MKTAG('v', 'p', '0', '9') },
+    { AV_CODEC_ID_AV1         , MKTAG('a', 'v', '0', '1') },
     { AV_CODEC_ID_AAC         , MKTAG('m', 'p', '4', 'a') },
     { AV_CODEC_ID_MP4ALS      , MKTAG('m', 'p', '4', 'a') },
     { AV_CODEC_ID_MP3         , MKTAG('m', 'p', '4', 'a') },

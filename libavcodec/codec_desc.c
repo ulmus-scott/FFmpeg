@@ -1395,6 +1395,13 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .props     = AV_CODEC_PROP_LOSSLESS,
     },
     {
+        .id        = AV_CODEC_ID_AVS2,
+        .type      = AVMEDIA_TYPE_VIDEO,
+        .name      = "avs2",
+        .long_name = NULL_IF_CONFIG_SMALL("AVS2-P2/IEEE1857.4"),
+        .props     = AV_CODEC_PROP_LOSSY,
+    },
+    {
         .id        = AV_CODEC_ID_Y41P,
         .type      = AVMEDIA_TYPE_VIDEO,
         .name      = "y41p",
@@ -2876,6 +2883,13 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .type      = AVMEDIA_TYPE_AUDIO,
         .name      = "sbc",
         .long_name = NULL_IF_CONFIG_SMALL("SBC (low-complexity subband codec)"),
+        .props     = AV_CODEC_PROP_LOSSY,
+    },
+    {
+        .id        = AV_CODEC_ID_ATRAC9,
+        .type      = AVMEDIA_TYPE_AUDIO,
+        .name      = "atrac9",
+        .long_name = NULL_IF_CONFIG_SMALL("ATRAC9 (Adaptive TRansform Acoustic Coding 9)"),
         .props     = AV_CODEC_PROP_LOSSY,
     },
 

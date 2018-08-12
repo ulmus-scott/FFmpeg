@@ -409,6 +409,7 @@ enum AVCodecID {
     AV_CODEC_ID_DXV,
     AV_CODEC_ID_SCREENPRESSO,
     AV_CODEC_ID_RSCC,
+    AV_CODEC_ID_AVS2,
 
     AV_CODEC_ID_Y41P = 0x8000,
     AV_CODEC_ID_AVRP,
@@ -637,6 +638,7 @@ enum AVCodecID {
     AV_CODEC_ID_APTX,
     AV_CODEC_ID_APTX_HD,
     AV_CODEC_ID_SBC,
+    AV_CODEC_ID_ATRAC9,
 
     /* subtitle codecs */
     AV_CODEC_ID_FIRST_SUBTITLE = 0x17000,          ///< A dummy ID pointing at the start of subtitle codecs.

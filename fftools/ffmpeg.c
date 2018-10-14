@@ -1794,9 +1794,11 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     if (total_size < 0) av_bprintf(&buf_script, "total_size=N/A\n");
     else                av_bprintf(&buf_script, "total_size=%"PRId64"\n", total_size);
     if (pts == AV_NOPTS_VALUE) {
+        av_bprintf(&buf_script, "out_time_us=N/A\n");
         av_bprintf(&buf_script, "out_time_ms=N/A\n");
         av_bprintf(&buf_script, "out_time=N/A\n");
     } else {
+        av_bprintf(&buf_script, "out_time_us=%"PRId64"\n", pts);
         av_bprintf(&buf_script, "out_time_ms=%"PRId64"\n", pts);
         av_bprintf(&buf_script, "out_time=%s%02d:%02d:%02d.%06d\n",
                    hours_sign, hours, mins, secs, us);
@@ -3070,7 +3072,13 @@ static int init_output_stream_streamcopy(OutputStream *ost)
                "Error setting up codec context options.\n");
         return ret;
     }
-    avcodec_parameters_from_context(par_src, ost->enc_ctx);
+
+    ret = avcodec_parameters_from_context(par_src, ost->enc_ctx);
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_FATAL,
+               "Error getting reference codec parameters.\n");
+        return ret;
+    }
 
     if (!codec_tag) {
         unsigned int codec_tag_tmp;

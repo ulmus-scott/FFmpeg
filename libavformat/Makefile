@@ -116,6 +116,8 @@ OBJS-$(CONFIG_AVI_MUXER)                 += avienc.o mpegtsenc.o avlanguage.o ra
 OBJS-$(CONFIG_AVM2_MUXER)                += swfenc.o swf.o
 OBJS-$(CONFIG_AVR_DEMUXER)               += avr.o pcm.o
 OBJS-$(CONFIG_AVS_DEMUXER)               += avs.o voc_packet.o vocdec.o voc.o
+OBJS-$(CONFIG_AVS2_DEMUXER)              += davs2.o rawdec.o
+OBJS-$(CONFIG_AVS2_MUXER)                += rawenc.o
 OBJS-$(CONFIG_BETHSOFTVID_DEMUXER)       += bethsoftvid.o
 OBJS-$(CONFIG_BFI_DEMUXER)               += bfi.o
 OBJS-$(CONFIG_BINK_DEMUXER)              += bink.o
@@ -286,7 +288,7 @@ OBJS-$(CONFIG_MATROSKA_DEMUXER)          += matroskadec.o matroska.o  \
                                             oggparsevorbis.o vorbiscomment.o \
                                             flac_picture.o replaygain.o
 OBJS-$(CONFIG_MATROSKA_MUXER)            += matroskaenc.o matroska.o \
-                                            avc.o hevc.o \
+                                            av1.o avc.o hevc.o \
                                             flacenc_header.o avlanguage.o vorbiscomment.o wv.o \
                                             webmdashenc.o webm_chunk.o
 OBJS-$(CONFIG_MD5_MUXER)                 += hashenc.o
@@ -467,6 +469,7 @@ OBJS-$(CONFIG_SDX_DEMUXER)               += sdxdec.o
 OBJS-$(CONFIG_SEGAFILM_DEMUXER)          += segafilm.o
 OBJS-$(CONFIG_SEGAFILM_MUXER)            += segafilmenc.o
 OBJS-$(CONFIG_SEGMENT_MUXER)             += segment.o
+OBJS-$(CONFIG_SER_DEMUXER)               += serdec.o
 OBJS-$(CONFIG_SHORTEN_DEMUXER)           += shortendec.o rawdec.o
 OBJS-$(CONFIG_SIFF_DEMUXER)              += siff.o
 OBJS-$(CONFIG_SINGLEJPEG_MUXER)          += rawenc.o
@@ -531,7 +534,7 @@ OBJS-$(CONFIG_WAV_DEMUXER)               += wavdec.o pcm.o
 OBJS-$(CONFIG_WAV_MUXER)                 += wavenc.o
 OBJS-$(CONFIG_WC3_DEMUXER)               += wc3movie.o
 OBJS-$(CONFIG_WEBM_MUXER)                += matroskaenc.o matroska.o \
-                                            avc.o hevc.o \
+                                            av1.o avc.o hevc.o \
                                             flacenc_header.o avlanguage.o \
                                             wv.o vorbiscomment.o \
                                             webmdashenc.o webm_chunk.o
@@ -559,20 +562,12 @@ OBJS-$(CONFIG_YOP_DEMUXER)               += yop.o
 OBJS-$(CONFIG_YUV4MPEGPIPE_DEMUXER)      += yuv4mpegdec.o
 OBJS-$(CONFIG_YUV4MPEGPIPE_MUXER)        += yuv4mpegenc.o
 
-# external libraries
+# external library muxers/demuxers
 OBJS-$(CONFIG_AVISYNTH_DEMUXER)          += avisynth.o
 OBJS-$(CONFIG_CHROMAPRINT_MUXER)         += chromaprint.o
 OBJS-$(CONFIG_LIBGME_DEMUXER)            += libgme.o
 OBJS-$(CONFIG_LIBMODPLUG_DEMUXER)        += libmodplug.o
 OBJS-$(CONFIG_LIBOPENMPT_DEMUXER)        += libopenmpt.o
-OBJS-$(CONFIG_LIBRTMP_PROTOCOL)          += librtmp.o
-OBJS-$(CONFIG_LIBRTMPE_PROTOCOL)         += librtmp.o
-OBJS-$(CONFIG_LIBRTMPS_PROTOCOL)         += librtmp.o
-OBJS-$(CONFIG_LIBRTMPT_PROTOCOL)         += librtmp.o
-OBJS-$(CONFIG_LIBRTMPTE_PROTOCOL)        += librtmp.o
-OBJS-$(CONFIG_LIBSRT_PROTOCOL)           += libsrt.o
-OBJS-$(CONFIG_LIBSSH_PROTOCOL)           += libssh.o
-OBJS-$(CONFIG_LIBSMBCLIENT_PROTOCOL)     += libsmbclient.o
 OBJS-$(CONFIG_VAPOURSYNTH_DEMUXER)       += vapoursynth.o
 
 # protocols I/O
@@ -604,7 +599,7 @@ OBJS-$(CONFIG_RTMPS_PROTOCOL)            += rtmpproto.o rtmpdigest.o rtmppkt.o
 OBJS-$(CONFIG_RTMPT_PROTOCOL)            += rtmpproto.o rtmpdigest.o rtmppkt.o
 OBJS-$(CONFIG_RTMPTE_PROTOCOL)           += rtmpproto.o rtmpdigest.o rtmppkt.o
 OBJS-$(CONFIG_RTMPTS_PROTOCOL)           += rtmpproto.o rtmpdigest.o rtmppkt.o
-OBJS-$(CONFIG_RTP_PROTOCOL)              += rtpproto.o
+OBJS-$(CONFIG_RTP_PROTOCOL)              += rtpproto.o ip.o
 OBJS-$(CONFIG_SCTP_PROTOCOL)             += sctp.o
 OBJS-$(CONFIG_SRTP_PROTOCOL)             += srtpproto.o srtp.o
 OBJS-$(CONFIG_SUBFILE_PROTOCOL)          += subfile.o
@@ -617,9 +612,19 @@ TLS-OBJS-$(CONFIG_OPENSSL)               += tls_openssl.o
 TLS-OBJS-$(CONFIG_SECURETRANSPORT)       += tls_securetransport.o
 TLS-OBJS-$(CONFIG_SCHANNEL)              += tls_schannel.o
 OBJS-$(CONFIG_TLS_PROTOCOL)              += tls.o $(TLS-OBJS-yes)
-OBJS-$(CONFIG_UDP_PROTOCOL)              += udp.o
-OBJS-$(CONFIG_UDPLITE_PROTOCOL)          += udp.o
+OBJS-$(CONFIG_UDP_PROTOCOL)              += udp.o ip.o
+OBJS-$(CONFIG_UDPLITE_PROTOCOL)          += udp.o ip.o
 OBJS-$(CONFIG_UNIX_PROTOCOL)             += unix.o
+
+# external library protocols
+OBJS-$(CONFIG_LIBRTMP_PROTOCOL)          += librtmp.o
+OBJS-$(CONFIG_LIBRTMPE_PROTOCOL)         += librtmp.o
+OBJS-$(CONFIG_LIBRTMPS_PROTOCOL)         += librtmp.o
+OBJS-$(CONFIG_LIBRTMPT_PROTOCOL)         += librtmp.o
+OBJS-$(CONFIG_LIBRTMPTE_PROTOCOL)        += librtmp.o
+OBJS-$(CONFIG_LIBSMBCLIENT_PROTOCOL)     += libsmbclient.o
+OBJS-$(CONFIG_LIBSRT_PROTOCOL)           += libsrt.o
+OBJS-$(CONFIG_LIBSSH_PROTOCOL)           += libssh.o
 
 # libavdevice dependencies
 OBJS-$(CONFIG_IEC61883_INDEV)            += dv.o

@@ -50,6 +50,9 @@ struct FrameListData {
     unsigned long duration;          /**< duration to show frame
                                           (in timebase units) */
     uint32_t flags;                  /**< flags for this frame */
+    uint64_t sse[4];
+    int have_sse;                    /**< true if we have pending sse[] */
+    uint64_t frame_number;
     struct FrameListData *next;
 };
 
@@ -68,6 +71,9 @@ typedef struct AOMEncoderContext {
     int static_thresh;
     int drop_threshold;
     int noise_sensitivity;
+    uint64_t sse[4];
+    int have_sse; /**< true if we have pending sse[] */
+    uint64_t frame_number;
 } AOMContext;
 
 static const char *const ctlidstr[] = {
@@ -289,7 +295,12 @@ static av_cold int aom_init(AVCodecContext *avctx,
 {
     AOMContext *ctx = avctx->priv_data;
     struct aom_codec_enc_cfg enccfg = { 0 };
+#ifdef AOM_FRAME_IS_INTRAONLY
+    aom_codec_flags_t flags =
+        (avctx->flags & AV_CODEC_FLAG_PSNR) ? AOM_CODEC_USE_PSNR : 0;
+#else
     aom_codec_flags_t flags = 0;
+#endif
     AVCPBProperties *cpb_props;
     int res;
     aom_img_fmt_t img_fmt;
@@ -319,7 +330,7 @@ static av_cold int aom_init(AVCodecContext *avctx,
     enccfg.g_h            = avctx->height;
     enccfg.g_timebase.num = avctx->time_base.num;
     enccfg.g_timebase.den = avctx->time_base.den;
-    enccfg.g_threads      = avctx->thread_count;
+    enccfg.g_threads      = avctx->thread_count ? avctx->thread_count : av_cpu_count();
 
     if (ctx->lag_in_frames >= 0)
         enccfg.g_lag_in_frames = ctx->lag_in_frames;
@@ -498,7 +509,8 @@ static av_cold int aom_init(AVCodecContext *avctx,
     return 0;
 }
 
-static inline void cx_pktcpy(struct FrameListData *dst,
+static inline void cx_pktcpy(AOMContext *ctx,
+                             struct FrameListData *dst,
                              const struct aom_codec_cx_pkt *src)
 {
     dst->pts      = src->data.frame.pts;
@@ -506,6 +518,17 @@ static inline void cx_pktcpy(struct FrameListData *dst,
     dst->flags    = src->data.frame.flags;
     dst->sz       = src->data.frame.sz;
     dst->buf      = src->data.frame.buf;
+#ifdef AOM_FRAME_IS_INTRAONLY
+    dst->have_sse = 0;
+    dst->frame_number = ++ctx->frame_number;
+    dst->have_sse = ctx->have_sse;
+    if (ctx->have_sse) {
+        /* associate last-seen SSE to the frame. */
+        /* Transfers ownership from ctx to dst. */
+        memcpy(dst->sse, ctx->sse, sizeof(dst->sse));
+        ctx->have_sse = 0;
+    }
+#endif
 }
 
 /**
@@ -519,6 +542,7 @@ static int storeframe(AVCodecContext *avctx, struct FrameListData *cx_frame,
                       AVPacket *pkt)
 {
     AOMContext *ctx = avctx->priv_data;
+    int pict_type;
     int ret = ff_alloc_packet2(avctx, pkt, cx_frame->sz, 0);
     if (ret < 0) {
         av_log(avctx, AV_LOG_ERROR,
@@ -528,8 +552,27 @@ static int storeframe(AVCodecContext *avctx, struct FrameListData *cx_frame,
     memcpy(pkt->data, cx_frame->buf, pkt->size);
     pkt->pts = pkt->dts = cx_frame->pts;
 
-    if (!!(cx_frame->flags & AOM_FRAME_IS_KEY))
+    if (!!(cx_frame->flags & AOM_FRAME_IS_KEY)) {
         pkt->flags |= AV_PKT_FLAG_KEY;
+#ifdef AOM_FRAME_IS_INTRAONLY
+        pict_type = AV_PICTURE_TYPE_I;
+    } else if (cx_frame->flags & AOM_FRAME_IS_INTRAONLY) {
+        pict_type = AV_PICTURE_TYPE_I;
+    } else {
+        pict_type = AV_PICTURE_TYPE_P;
+    }
+
+    ff_side_data_set_encoder_stats(pkt, 0, cx_frame->sse + 1,
+                                   cx_frame->have_sse ? 3 : 0, pict_type);
+
+    if (cx_frame->have_sse) {
+        int i;
+        for (i = 0; i < 3; ++i) {
+            avctx->error[i] += cx_frame->sse[i + 1];
+        }
+        cx_frame->have_sse = 0;
+#endif
+    }
 
     if (avctx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) {
         ret = av_bsf_send_packet(ctx->bsf, pkt);
@@ -585,7 +628,7 @@ static int queue_frames(AVCodecContext *avctx, AVPacket *pkt_out)
                 /* avoid storing the frame when the list is empty and we haven't yet
                  * provided a frame for output */
                 av_assert0(!ctx->coded_frame_list);
-                cx_pktcpy(&cx_frame, pkt);
+                cx_pktcpy(ctx, &cx_frame, pkt);
                 size = storeframe(avctx, &cx_frame, pkt_out);
                 if (size < 0)
                     return size;
@@ -598,7 +641,7 @@ static int queue_frames(AVCodecContext *avctx, AVPacket *pkt_out)
                            "Frame queue element alloc failed\n");
                     return AVERROR(ENOMEM);
                 }
-                cx_pktcpy(cx_frame, pkt);
+                cx_pktcpy(ctx, cx_frame, pkt);
                 cx_frame->buf = av_malloc(cx_frame->sz);
 
                 if (!cx_frame->buf) {
@@ -628,7 +671,18 @@ static int queue_frames(AVCodecContext *avctx, AVPacket *pkt_out)
             stats->sz += pkt->data.twopass_stats.sz;
             break;
         }
-        case AOM_CODEC_PSNR_PKT: // FIXME add support for AV_CODEC_FLAG_PSNR
+#ifdef AOM_FRAME_IS_INTRAONLY
+        case AOM_CODEC_PSNR_PKT:
+        {
+            av_assert0(!ctx->have_sse);
+            ctx->sse[0] = pkt->data.psnr.sse[0];
+            ctx->sse[1] = pkt->data.psnr.sse[1];
+            ctx->sse[2] = pkt->data.psnr.sse[2];
+            ctx->sse[3] = pkt->data.psnr.sse[3];
+            ctx->have_sse = 1;
+            break;
+        }
+#endif
         case AOM_CODEC_CUSTOM_PKT:
             // ignore unsupported/unrecognized packet types
             break;
@@ -738,10 +792,6 @@ static const AVOption options[] = {
                          "alternate reference frame selection",    OFFSET(lag_in_frames),   AV_OPT_TYPE_INT, {.i64 = -1},      -1,      INT_MAX, VE},
     { "error-resilience", "Error resilience configuration", OFFSET(error_resilient), AV_OPT_TYPE_FLAGS, {.i64 = 0}, INT_MIN, INT_MAX, VE, "er"},
     { "default",         "Improve resiliency against losses of whole frames", 0, AV_OPT_TYPE_CONST, {.i64 = AOM_ERROR_RESILIENT_DEFAULT}, 0, 0, VE, "er"},
-    { "partitions",      "The frame partitions are independently decodable "
-                         "by the bool decoder, meaning that partitions can be decoded even "
-                         "though earlier partitions have been lost. Note that intra predicition"
-                         " is still done over the partition boundary.",       0, AV_OPT_TYPE_CONST, {.i64 = AOM_ERROR_RESILIENT_PARTITIONS}, 0, 0, VE, "er"},
     { "crf",              "Select the quality for constant quality mode", offsetof(AOMContext, crf), AV_OPT_TYPE_INT, {.i64 = -1}, -1, 63, VE },
     { "static-thresh",    "A change threshold on blocks below which they will be skipped by the encoder", OFFSET(static_thresh), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, VE },
     { "drop-threshold",   "Frame drop threshold", offsetof(AOMContext, drop_threshold), AV_OPT_TYPE_INT, {.i64 = 0 }, INT_MIN, INT_MAX, VE },

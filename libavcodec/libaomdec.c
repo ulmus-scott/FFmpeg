@@ -42,8 +42,7 @@ static av_cold int aom_init(AVCodecContext *avctx,
 {
     AV1DecodeContext *ctx           = avctx->priv_data;
     struct aom_codec_dec_cfg deccfg = {
-        /* token partitions+1 would be a decent choice */
-        .threads = FFMIN(avctx->thread_count, 16)
+        .threads = FFMIN(avctx->thread_count ? avctx->thread_count : av_cpu_count(), 16)
     };
 
     av_log(avctx, AV_LOG_INFO, "%s\n", aom_codec_version_str());
@@ -232,5 +231,4 @@ AVCodec ff_libaom_av1_decoder = {
     .capabilities   = AV_CODEC_CAP_AUTO_THREADS | AV_CODEC_CAP_DR1,
     .profiles       = NULL_IF_CONFIG_SMALL(ff_av1_profiles),
     .wrapper_name   = "libaom",
-    .bsfs           = "dump_extra",
 };

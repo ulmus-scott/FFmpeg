@@ -1205,7 +1205,7 @@ Set max allowed Impulse Response filter duration in seconds. Default is 30 secon
 Allowed range is 0.1 to 60 seconds.
 
 @item response
-Show IR frequency reponse, magnitude and phase in additional video stream.
+Show IR frequency reponse, magnitude(magenta) and phase(green) and group delay(yellow) in additional video stream.
 By default it is disabled.
 
 @item channel
@@ -4343,6 +4343,19 @@ you may wish to increase the value to account for background noise.
 Can be specified in dB (in case "dB" is appended to the specified value)
 or amplitude ratio. Default value is @code{0}.
 
+@item start_silence
+Specify max duration of silence at beginning that will be kept after
+trimming. Default is 0, which is equal to trimming all samples detected
+as silence.
+
+@item start_mode
+Specify mode of detection of silence end in start of multi-channel audio.
+Can be @var{any} or @var{all}. Default is @var{any}.
+With @var{any}, any sample that is detected as non-silence will cause
+stopped trimming of silence.
+With @var{all}, only if all channels are detected as non-silence will cause
+stopped trimming of silence.
+
 @item stop_periods
 Set the count for trimming silence from the end of audio.
 To remove silence from the middle of a file, specify a @var{stop_periods}
@@ -4364,11 +4377,18 @@ the end of audio.
 Can be specified in dB (in case "dB" is appended to the specified value)
 or amplitude ratio. Default value is @code{0}.
 
-@item leave_silence
-This indicates that @var{stop_duration} length of audio should be left intact
-at the beginning of each period of silence.
-For example, if you want to remove long pauses between words but do not want
-to remove the pauses completely. Default value is @code{0}.
+@item stop_silence
+Specify max duration of silence at end that will be kept after
+trimming. Default is 0, which is equal to trimming all samples detected
+as silence.
+
+@item stop_mode
+Specify mode of detection of silence start in end of multi-channel audio.
+Can be @var{any} or @var{all}. Default is @var{any}.
+With @var{any}, any sample that is detected as non-silence will cause
+stopped trimming of silence.
+With @var{all}, only if all channels are detected as non-silence will cause
+stopped trimming of silence.
 
 @item detection
 Set how is silence detected. Can be @code{rms} or @code{peak}. Second is faster
@@ -4376,7 +4396,8 @@ and works better with digital silence which is exactly 0.
 Default value is @code{rms}.
 
 @item window
-Set ratio used to calculate size of window for detecting silence.
+Set duration in number of seconds used to calculate size of window in number
+of samples for detecting silence.
 Default value is @code{0.02}. Allowed range is from @code{0} to @code{10}.
 @end table
 
@@ -4388,14 +4409,14 @@ The following example shows how this filter can be used to start a recording
 that does not contain the delay at the start which usually occurs between
 pressing the record button and the start of the performance:
 @example
-silenceremove=1:5:0.02
+silenceremove=start_periods=1:start_duration=5:start_threshold=0.02
 @end example
 
 @item
 Trim all silence encountered from beginning to end where there is more than 1
 second of silence in audio:
 @example
-silenceremove=0:0:0:-1:1:-90dB
+silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-90dB
 @end example
 @end itemize
 
@@ -5349,6 +5370,49 @@ Set number of samples per each frame.
 Set window function to be used when generating FIR coefficients.
 @end table
 
+@section sinc
+
+Generate a sinc kaiser-windowed low-pass, high-pass, band-pass, or band-reject FIR coefficients.
+
+The resulting stream can be used with @ref{afir} filter for filtering the audio signal.
+
+The filter accepts the following options:
+
+@table @option
+@item sample_rate, r
+Set sample rate, default is 44100.
+
+@item nb_samples, n
+Set number of samples per each frame. Default is 1024.
+
+@item hp
+Set high-pass frequency. Default is 0.
+
+@item lp
+Set low-pass frequency. Default is 0.
+If high-pass frequency is lower than low-pass frequency and low-pass frequency
+is higher than 0 then filter will create band-pass filter coefficients,
+otherwise band-reject filter coefficients.
+
+@item phase
+Set filter phase response. Default is 50. Allowed range is from 0 to 100.
+
+@item beta
+Set Kaiser window beta.
+
+@item att
+Set stop-band attenuation. Default is 120dB, allowed range is from 40 to 180 dB.
+
+@item round
+Enable rounding, by default is disabled.
+
+@item hptaps
+Set number of taps for high-pass filter.
+
+@item lptaps
+Set number of taps for low-pass filter.
+@end table
+
 @section sine
 
 Generate an audio signal made of a sine wave with amplitude 1/8.
@@ -6097,6 +6161,26 @@ Only deinterlace frames marked as interlaced.
 @end table
 
 The default value is @code{all}.
+@end table
+
+@section chromahold
+Remove all color information for all colors except for certain one.
+
+The filter accepts the following options:
+
+@table @option
+@item color
+The color which will not be replaced with neutral chroma.
+
+@item similarity
+Similarity percentage with the above color.
+0.01 matches only the exact key color, while 1.0 matches everything.
+
+@item yuv
+Signals that the color passed is already in YUV instead of RGB.
+
+Literal colors like "green" or "red" don't make sense with this enabled anymore.
+This can be used to pass exact YUV values as hexadecimal numbers.
 @end table
 
 @section chromakey
@@ -10037,6 +10121,8 @@ Default is @code{-1}.
 
 @section geq
 
+Apply generic equation to each pixel.
+
 The filter accepts the following options:
 
 @table @option
@@ -10213,6 +10299,63 @@ gradfun=radius=8
 @end example
 
 @end itemize
+
+@section graphmonitor, agraphmonitor
+Show various filtergraph stats.
+
+With this filter one can debug complete filtergraph.
+Especially issues with links filling with queued frames.
+
+The filter accepts the following options:
+
+@table @option
+@item size, s
+Set video output size. Default is @var{hd720}.
+
+@item opacity, o
+Set video opacity. Default is @var{0.9}. Allowed range is from @var{0} to @var{1}.
+
+@item mode, m
+Set output mode, can be @var{fulll} or @var{compact}.
+In @var{compact} mode only filters with some queued frames have displayed stats.
+
+@item flags, f
+Set flags which enable which stats are shown in video.
+
+Available values for flags are:
+@table @samp
+@item queue
+Display number of queued frames in each link.
+
+@item frame_count_in
+Display number of frames taken from filter.
+
+@item frame_count_out
+Display number of frames given out from filter.
+
+@item pts
+Display current filtered frame pts.
+
+@item time
+Display current filtered frame time.
+
+@item timebase
+Display time base for filter link.
+
+@item format
+Display used format for filter link.
+
+@item size
+Display video size or number of audio channels in case of audio used by filter link.
+
+@item rate
+Display video frame rate or sample rate in case of audio used by filter link.
+@end table
+
+@item rate, r
+Set upper limit for video rate of output stream, Default value is @var{25}.
+This guarantee that output video frame rate will not be higher than this value.
+@end table
 
 @section greyedge
 A color constancy variation filter which estimates scene illumination via grey edge algorithm
@@ -11235,6 +11378,28 @@ Set maximal size in number of frames. Default is 0.
 @item start
 Set first frame of loop. Default is 0.
 @end table
+
+@subsection Examples
+
+@itemize
+@item
+Loop single first frame infinitely:
+@example
+loop=loop=-1:size=1:start=0
+@end example
+
+@item
+Loop single first frame 10 times:
+@example
+loop=loop=10:size=1:start=0
+@end example
+
+@item
+Loop 10 first frames 5 times:
+@example
+loop=loop=5:size=10:start=0
+@end example
+@end itemize
 
 @section lut1d
 
@@ -14883,6 +15048,125 @@ Mark the frame as progressive.
 @end table
 @end table
 
+@anchor{setparams}
+@section setparams
+
+Force frame parameter for the output video frame.
+
+The @code{setparams} filter marks interlace and color range for the
+output frames. It does not change the input frame, but only sets the
+corresponding property, which affects how the frame is treated by
+filters/encoders.
+
+@table @option
+@item field_mode
+Available values are:
+
+@table @samp
+@item auto
+Keep the same field property (default).
+
+@item bff
+Mark the frame as bottom-field-first.
+
+@item tff
+Mark the frame as top-field-first.
+
+@item prog
+Mark the frame as progressive.
+@end table
+
+@item range
+Available values are:
+
+@table @samp
+@item auto
+Keep the same color range property (default).
+
+@item unspecified, unknown
+Mark the frame as unspecified color range.
+
+@item limited, tv, mpeg
+Mark the frame as limited range.
+
+@item full, pc, jpeg
+Mark the frame as full range.
+@end table
+
+@item color_primaries
+Set the color primaries.
+Available values are:
+
+@table @samp
+@item auto
+Keep the same color primaries property (default).
+
+@item bt709
+@item unknown
+@item bt470m
+@item bt470bg
+@item smpte170m
+@item smpte240m
+@item film
+@item bt2020
+@item smpte428
+@item smpte431
+@item smpte432
+@item jedec-p22
+@end table
+
+@item color_trc
+Set the color transfert.
+Available values are:
+
+@table @samp
+@item auto
+Keep the same color trc property (default).
+
+@item bt709
+@item unknown
+@item bt470m
+@item bt470bg
+@item smpte170m
+@item smpte240m
+@item linear
+@item log100
+@item log316
+@item iec61966-2-4
+@item bt1361e
+@item iec61966-2-1
+@item bt2020-10
+@item bt2020-12
+@item smpte2084
+@item smpte428
+@item arib-std-b67
+@end table
+
+@item colorspace
+Set the colorspace.
+Available values are:
+
+@table @samp
+@item auto
+Keep the same colorspace property (default).
+
+@item gbr
+@item bt709
+@item unknown
+@item fcc
+@item bt470bg
+@item smpte170m
+@item smpte240m
+@item ycgco
+@item bt2020nc
+@item bt2020c
+@item smpte2085
+@item chroma-derived-nc
+@item chroma-derived-c
+@item ictcp
+@end table
+@end table
+
 @section showinfo
 
 Show a line containing various information for each input video frame.
@@ -17190,6 +17474,35 @@ and ones with constant delta pts.
 If there was frames with variable delta, than it will also show min and max delta
 encountered.
 
+@section vibrance
+
+Boost or alter saturation.
+
+The filter accepts the following options:
+@table @option
+@item intensity
+Set strength of boost if positive value or strength of alter if negative value.
+Default is 0. Allowed range is from -2 to 2.
+
+@item rbal
+Set the red balance. Default is 1. Allowed range is from -10 to 10.
+
+@item gbal
+Set the green balance. Default is 1. Allowed range is from -10 to 10.
+
+@item bbal
+Set the blue balance. Default is 1. Allowed range is from -10 to 10.
+
+@item rlum
+Set the red luma coefficient.
+
+@item glum
+Set the green luma coefficient.
+
+@item blum
+Set the blue luma coefficient.
+@end table
+
 @anchor{vignette}
 @section vignette
 
@@ -17565,6 +17878,61 @@ Set the scaling dimension: @code{2} for @code{2xBR}, @code{3} for
 @code{3xBR} and @code{4} for @code{4xBR}.
 Default is @code{3}.
 @end table
+
+@section xstack
+Stack video inputs into custom layout.
+
+All streams must be of same pixel format.
+
+The filter accept the following option:
+
+@table @option
+@item inputs
+Set number of input streams. Default is 2.
+
+@item layout
+Specify layout of inputs.
+This option requires the desired layout configuration to be explicitly set by the user.
+This sets position of each video input in output. Each input
+is separated by '|'.
+The first number represents the column, and the second number represents the row.
+Numbers start at 0 and are separated by '_'. Optionally one can use wX and hX,
+where X is video input from which to take width or height.
+Multiple values can be used when separated by '+'. In such
+case values are summed together.
+
+@item shortest
+If set to 1, force the output to terminate when the shortest input
+terminates. Default value is 0.
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+Display 4 inputs into 2x2 grid,
+note that if inputs are of different sizes unused gaps might appear,
+as not all of output video is used.
+@example
+xstack=inputs=4:layout=0_0|0_h0|w0_0|w0_h0
+@end example
+
+@item
+Display 4 inputs into 1x4 grid,
+note that if inputs are of different sizes unused gaps might appear,
+as not all of output video is used.
+@example
+xstack=inputs=4:layout=0_0|0_h0|0_h0+h1|0_h0+h1+h2
+@end example
+
+@item
+Display 9 inputs into 3x3 grid,
+note that if inputs are of different sizes unused gaps might appear,
+as not all of output video is used.
+@example
+xstack=inputs=9:layout=w3_0|w3_h0+h2|w3_h0|0_h4|0_0|w3+w1_0|0_h1+h2|w3+w1_h0|w3+w1_h1+h2
+@end example
+@end itemize
 
 @anchor{yadif}
 @section yadif
@@ -20564,6 +20932,7 @@ It accepts the following values:
 @item cauchy
 @item parzen
 @item poisson
+@item bohman
 @end table
 Default is @code{hanning}.
 
@@ -20722,6 +21091,7 @@ It accepts the following values:
 @item cauchy
 @item parzen
 @item poisson
+@item bohman
 @end table
 
 Default value is @code{hann}.
@@ -20885,6 +21255,7 @@ It accepts the following values:
 @item cauchy
 @item parzen
 @item poisson
+@item bohman
 @end table
 Default value is @code{hann}.
 

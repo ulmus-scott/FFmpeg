@@ -191,8 +191,8 @@ static const FormatEntry format_entries[AV_PIX_FMT_NB] = {
     [AV_PIX_FMT_BGR444LE]    = { 1, 1 },
     [AV_PIX_FMT_BGR444BE]    = { 1, 1 },
     [AV_PIX_FMT_YA8]         = { 1, 1 },
-    [AV_PIX_FMT_YA16BE]      = { 1, 0 },
-    [AV_PIX_FMT_YA16LE]      = { 1, 0 },
+    [AV_PIX_FMT_YA16BE]      = { 1, 1 },
+    [AV_PIX_FMT_YA16LE]      = { 1, 1 },
     [AV_PIX_FMT_BGR48BE]     = { 1, 1 },
     [AV_PIX_FMT_BGR48LE]     = { 1, 1 },
     [AV_PIX_FMT_BGRA64BE]    = { 1, 1, 1 },
@@ -1810,8 +1810,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
     /* unscaled special cases */
     if (unscaled && !usesHFilter && !usesVFilter &&
         (c->srcRange == c->dstRange || isAnyRGB(dstFormat) ||
-         srcFormat == AV_PIX_FMT_GRAYF32 && dstFormat == AV_PIX_FMT_GRAY8 ||
-         srcFormat == AV_PIX_FMT_GRAY8 && dstFormat == AV_PIX_FMT_GRAYF32)) {
+         isFloat(srcFormat) || isFloat(dstFormat))){
         ff_get_unscaled_swscale(c);
 
         if (c->swscale) {

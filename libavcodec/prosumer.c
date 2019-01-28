@@ -57,27 +57,25 @@ static int decompress(GetByteContext *gb, int size, PutByteContext *pb, const ui
     b = lut[2 * idx];
 
     while (1) {
-        if (bytestream2_get_bytes_left_p(pb) <= 0)
+        if (bytestream2_get_bytes_left_p(pb) <= 0 || bytestream2_get_eof(pb))
             return 0;
-        if (((b & 0xFF00u) != 0x8000u) || (b & 0xFFu)) {
+        if ((b & 0xFF00u) != 0x8000u || (b & 0xFFu)) {
             if ((b & 0xFF00u) != 0x8000u) {
                 bytestream2_put_le16(pb, b);
-            } else if (b & 0xFFu) {
+            } else {
                 idx = 0;
                 for (int i = 0; i < (b & 0xFFu); i++)
                     bytestream2_put_le32(pb, 0);
             }
             c = b >> 16;
             if (c & 0xFF00u) {
-                c = (((c >> 8) & 0xFFu) | (c & 0xFF00)) & 0xF00F;
                 fill = lut[2 * idx + 1];
-                if ((c & 0xFF00u) == 0x1000) {
+                if ((c & 0xF000u) == 0x1000) {
                     bytestream2_put_le16(pb, fill);
-                    c &= 0xFFFF00FFu;
                 } else {
                     bytestream2_put_le32(pb, fill);
-                    c &= 0xFFFF00FFu;
                 }
+                c = (c >> 8) & 0x0Fu;
             }
             while (c) {
                 a <<= 4;
@@ -101,6 +99,8 @@ static int decompress(GetByteContext *gb, int size, PutByteContext *pb, const ui
             }
             idx = a >> 20;
             b = lut[2 * idx];
+            if (!b)
+                return AVERROR_INVALIDDATA;
             continue;
         }
         idx = 2;
@@ -161,8 +161,9 @@ static int decode_frame(AVCodecContext *avctx, void *data,
     memset(s->decbuffer, 0, s->size);
     bytestream2_init(&s->gb, avpkt->data, avpkt->size);
     bytestream2_init_writer(&s->pb, s->decbuffer, s->size);
-
-    decompress(&s->gb, AV_RL32(avpkt->data + 28) >> 1, &s->pb, s->lut);
+    ret = decompress(&s->gb, AV_RL32(avpkt->data + 28) >> 1, &s->pb, s->lut);
+    if (ret < 0)
+        return ret;
     vertical_predict((uint32_t *)s->decbuffer, 0, (uint32_t *)s->initial_line, s->stride, 1);
     vertical_predict((uint32_t *)s->decbuffer, s->stride, (uint32_t *)s->decbuffer, s->stride, avctx->height - 1);
 

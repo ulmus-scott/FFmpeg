@@ -24,7 +24,6 @@
 #include "cbs_internal.h"
 #include "cbs_h264.h"
 #include "cbs_h265.h"
-#include "golomb.h"
 #include "h264.h"
 #include "h264_sei.h"
 #include "h2645_parse.h"
@@ -252,18 +251,30 @@ static int cbs_write_se_golomb(CodedBitstreamContext *ctx, PutBitContext *pbc,
 
 #define u(width, name, range_min, range_max) \
         xu(width, name, current->name, range_min, range_max, 0)
-#define flag(name) u(1, name, 0, 1)
+#define ub(width, name) \
+        xu(width, name, current->name, 0, MAX_UINT_BITS(width), 0)
+#define flag(name) ub(1, name)
 #define ue(name, range_min, range_max) \
         xue(name, current->name, range_min, range_max, 0)
+#define i(width, name, range_min, range_max) \
+        xi(width, name, current->name, range_min, range_max, 0)
+#define ib(width, name) \
+        xi(width, name, current->name, MIN_INT_BITS(width), MAX_INT_BITS(width), 0)
 #define se(name, range_min, range_max) \
         xse(name, current->name, range_min, range_max, 0)
 
 #define us(width, name, range_min, range_max, subs, ...) \
         xu(width, name, current->name, range_min, range_max, subs, __VA_ARGS__)
+#define ubs(width, name, subs, ...) \
+        xu(width, name, current->name, 0, MAX_UINT_BITS(width), subs, __VA_ARGS__)
 #define flags(name, subs, ...) \
         xu(1, name, current->name, 0, 1, subs, __VA_ARGS__)
 #define ues(name, range_min, range_max, subs, ...) \
         xue(name, current->name, range_min, range_max, subs, __VA_ARGS__)
+#define is(width, name, range_min, range_max, subs, ...) \
+        xi(width, name, current->name, range_min, range_max, subs, __VA_ARGS__)
+#define ibs(width, name, subs, ...) \
+        xi(width, name, current->name, MIN_INT_BITS(width), MAX_INT_BITS(width), subs, __VA_ARGS__)
 #define ses(name, range_min, range_max, subs, ...) \
         xse(name, current->name, range_min, range_max, subs, __VA_ARGS__)
 
@@ -291,6 +302,13 @@ static int cbs_write_se_golomb(CodedBitstreamContext *ctx, PutBitContext *pbc,
                                  &value, range_min, range_max)); \
         var = value; \
     } while (0)
+#define xi(width, name, var, range_min, range_max, subs, ...) do { \
+        int32_t value = range_min; \
+        CHECK(ff_cbs_read_signed(ctx, rw, width, #name, \
+                                 SUBSCRIPTS(subs, __VA_ARGS__), \
+                                 &value, range_min, range_max)); \
+        var = value; \
+    } while (0)
 #define xse(name, var, range_min, range_max, subs, ...) do { \
         int32_t value = range_min; \
         CHECK(cbs_read_se_golomb(ctx, rw, #name, \
@@ -309,9 +327,11 @@ static int cbs_h2645_read_more_rbsp_data(GetBitContext *gbc)
     int bits_left = get_bits_left(gbc);
     if (bits_left > 8)
         return 1;
-    if (show_bits(gbc, bits_left) == 1 << (bits_left - 1))
+    if (bits_left == 0)
         return 0;
-    return 1;
+    if (show_bits(gbc, bits_left) & MAX_UINT_BITS(bits_left - 1))
+        return 1;
+    return 0;
 }
 
 #define more_rbsp_data(var) ((var) = cbs_h2645_read_more_rbsp_data(rw))
@@ -338,6 +358,7 @@ static int cbs_h2645_read_more_rbsp_data(GetBitContext *gbc)
 #undef READWRITE
 #undef RWContext
 #undef xu
+#undef xi
 #undef xue
 #undef xse
 #undef infer
@@ -359,6 +380,12 @@ static int cbs_h2645_read_more_rbsp_data(GetBitContext *gbc)
 #define xue(name, var, range_min, range_max, subs, ...) do { \
         uint32_t value = var; \
         CHECK(cbs_write_ue_golomb(ctx, rw, #name, \
+                                  SUBSCRIPTS(subs, __VA_ARGS__), \
+                                  value, range_min, range_max)); \
+    } while (0)
+#define xi(width, name, var, range_min, range_max, subs, ...) do { \
+        int32_t value = var; \
+        CHECK(ff_cbs_write_signed(ctx, rw, width, #name, \
                                   SUBSCRIPTS(subs, __VA_ARGS__), \
                                   value, range_min, range_max)); \
     } while (0)
@@ -402,9 +429,11 @@ static int cbs_h2645_read_more_rbsp_data(GetBitContext *gbc)
 #undef READWRITE
 #undef RWContext
 #undef xu
+#undef xi
 #undef xue
 #undef xse
 #undef u
+#undef i
 #undef flag
 #undef ue
 #undef se
@@ -430,6 +459,7 @@ static void cbs_h264_free_sei_payload(H264RawSEIPayload *payload)
     case H264_SEI_TYPE_RECOVERY_POINT:
     case H264_SEI_TYPE_DISPLAY_ORIENTATION:
     case H264_SEI_TYPE_MASTERING_DISPLAY_COLOUR_VOLUME:
+    case H264_SEI_TYPE_ALTERNATIVE_TRANSFER:
         break;
     case H264_SEI_TYPE_USER_DATA_REGISTERED:
         av_buffer_unref(&payload->payload.user_data_registered.data_ref);
@@ -501,6 +531,7 @@ static void cbs_h265_free_sei_payload(H265RawSEIPayload *payload)
     case HEVC_SEI_TYPE_MASTERING_DISPLAY_INFO:
     case HEVC_SEI_TYPE_CONTENT_LIGHT_LEVEL_INFO:
     case HEVC_SEI_TYPE_ALTERNATIVE_TRANSFER_CHARACTERISTICS:
+    case HEVC_SEI_TYPE_ALPHA_CHANNEL_INFO:
         break;
     case HEVC_SEI_TYPE_USER_DATA_REGISTERED_ITU_T_T35:
         av_buffer_unref(&payload->payload.user_data_registered.data_ref);
@@ -1615,10 +1646,10 @@ int ff_cbs_h264_add_sei_message(CodedBitstreamContext *ctx,
     return 0;
 }
 
-int ff_cbs_h264_delete_sei_message(CodedBitstreamContext *ctx,
-                                   CodedBitstreamFragment *au,
-                                   CodedBitstreamUnit *nal,
-                                   int position)
+void ff_cbs_h264_delete_sei_message(CodedBitstreamContext *ctx,
+                                    CodedBitstreamFragment *au,
+                                    CodedBitstreamUnit *nal,
+                                    int position)
 {
     H264RawSEI *sei = nal->content;
 
@@ -1633,9 +1664,8 @@ int ff_cbs_h264_delete_sei_message(CodedBitstreamContext *ctx,
             if (&au->units[i] == nal)
                 break;
         }
-        av_assert0(i < au->nb_units && "NAL unit not in access unit.");
 
-        return ff_cbs_delete_unit(ctx, au, i);
+        ff_cbs_delete_unit(ctx, au, i);
     } else {
         cbs_h264_free_sei_payload(&sei->payload[position]);
 
@@ -1643,7 +1673,5 @@ int ff_cbs_h264_delete_sei_message(CodedBitstreamContext *ctx,
         memmove(sei->payload + position,
                 sei->payload + position + 1,
                 (sei->payload_count - position) * sizeof(*sei->payload));
-
-        return 0;
     }
 }

@@ -111,6 +111,28 @@ static void dump_stereo3d(AVFilterContext *ctx, AVFrameSideData *sd)
         av_log(ctx, AV_LOG_INFO, " (inverted)");
 }
 
+static void dump_roi(AVFilterContext *ctx, AVFrameSideData *sd)
+{
+    int nb_rois;
+    const AVRegionOfInterest *roi;
+    uint32_t roi_size;
+
+    roi = (const AVRegionOfInterest *)sd->data;
+    roi_size = roi->self_size;
+    if (!roi_size || sd->size % roi_size != 0) {
+        av_log(ctx, AV_LOG_ERROR, "Invalid AVRegionOfInterest.self_size.\n");
+        return;
+    }
+    nb_rois = sd->size / roi_size;
+
+    av_log(ctx, AV_LOG_INFO, "Regions Of Interest(RoI) information: ");
+    for (int i = 0; i < nb_rois; i++) {
+        roi = (const AVRegionOfInterest *)(sd->data + roi_size * i);
+        av_log(ctx, AV_LOG_INFO, "index: %d, region: (%d, %d)/(%d, %d), qp offset: %d/%d.\n",
+               i, roi->left, roi->top, roi->right, roi->bottom, roi->qoffset.num, roi->qoffset.den);
+    }
+}
+
 static void dump_color_property(AVFilterContext *ctx, AVFrame *frame)
 {
     const char *color_range_str     = av_color_range_name(frame->color_range);
@@ -232,10 +254,10 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
             break;
         case AV_FRAME_DATA_S12M_TIMECODE: {
             uint32_t *tc = (uint32_t*)sd->data;
-            for (int j = 1; j < tc[0]; j++) {
+            for (int j = 1; j <= tc[0]; j++) {
                 char tcbuf[AV_TIMECODE_STR_SIZE];
                 av_timecode_make_smpte_tc_string(tcbuf, tc[j], 0);
-                av_log(ctx, AV_LOG_INFO, "timecode - %s%s", tcbuf, j != tc[0] - 1 ? ", " : "");
+                av_log(ctx, AV_LOG_INFO, "timecode - %s%s", tcbuf, j != tc[0] ? ", " : "");
             }
             break;
         }
@@ -245,6 +267,9 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
             break;
         case AV_FRAME_DATA_AFD:
             av_log(ctx, AV_LOG_INFO, "afd: value of %"PRIu8, sd->data[0]);
+            break;
+        case AV_FRAME_DATA_REGIONS_OF_INTEREST:
+            dump_roi(ctx, sd);
             break;
         default:
             av_log(ctx, AV_LOG_WARNING, "unknown side data type %d (%d bytes)",

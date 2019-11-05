@@ -18,57 +18,25 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-/**
- * @file
- * DNN inference functions interface for native backend.
- */
+#ifndef AVFILTER_DNN_DNN_BACKEND_NATIVE_LAYER_CONV2D_H
+#define AVFILTER_DNN_DNN_BACKEND_NATIVE_LAYER_CONV2D_H
 
-
-#ifndef AVFILTER_DNN_BACKEND_NATIVE_H
-#define AVFILTER_DNN_BACKEND_NATIVE_H
-
-#include "dnn_interface.h"
-#include "libavformat/avio.h"
-
-typedef enum {INPUT, CONV, DEPTH_TO_SPACE} DNNLayerType;
+#include "dnn_backend_native.h"
 
 typedef enum {RELU, TANH, SIGMOID, NONE, LEAKY_RELU} DNNActivationFunc;
-
 typedef enum {VALID, SAME, SAME_CLAMP_TO_EDGE} DNNConvPaddingParam;
-
-typedef struct Layer{
-    DNNLayerType type;
-    float *output;
-    void *params;
-} Layer;
 
 typedef struct ConvolutionalParams{
     int32_t input_num, output_num, kernel_size;
     DNNActivationFunc activation;
     DNNConvPaddingParam padding_method;
     int32_t dilation;
+    int32_t has_bias;
     float *kernel;
     float *biases;
 } ConvolutionalParams;
 
-typedef struct InputParams{
-    int height, width, channels;
-} InputParams;
-
-typedef struct DepthToSpaceParams{
-    int block_size;
-} DepthToSpaceParams;
-
-// Represents simple feed-forward convolutional network.
-typedef struct ConvolutionalNetwork{
-    Layer *layers;
-    int32_t layers_num;
-} ConvolutionalNetwork;
-
-DNNModel *ff_dnn_load_model_native(const char *model_filename);
-
-DNNReturnType ff_dnn_execute_model_native(const DNNModel *model, DNNData *outputs, uint32_t nb_output);
-
-void ff_dnn_free_model_native(DNNModel **model);
-
+int dnn_load_layer_conv2d(Layer *layer, AVIOContext *model_file_context, int file_size);
+int dnn_execute_layer_conv2d(DnnOperand *operands, const int32_t *input_operand_indexes,
+                             int32_t output_operand_index, const void *parameters);
 #endif

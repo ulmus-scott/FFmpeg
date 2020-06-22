@@ -4875,7 +4875,7 @@ static int mov_write_ftyp_tag(AVIOContext *pb, AVFormatContext *s)
 {
     MOVMuxContext *mov = s->priv_data;
     int64_t pos = avio_tell(pb);
-    int has_h264 = 0, has_video = 0;
+    int has_h264 = 0, has_av1 = 0, has_video = 0;
     int i;
 
     for (i = 0; i < s->nb_streams; i++) {
@@ -4886,6 +4886,8 @@ static int mov_write_ftyp_tag(AVIOContext *pb, AVFormatContext *s)
             has_video = 1;
         if (st->codecpar->codec_id == AV_CODEC_ID_H264)
             has_h264 = 1;
+        if (st->codecpar->codec_id == AV_CODEC_ID_AV1)
+            has_av1 = 1;
     }
 
     avio_wb32(pb, 0); /* size */
@@ -4909,6 +4911,8 @@ static int mov_write_ftyp_tag(AVIOContext *pb, AVFormatContext *s)
                 ffio_wfourcc(pb, "cmfc");
             if (mov->flags & FF_MOV_FLAG_FRAGMENT && !(mov->flags & FF_MOV_FLAG_NEGATIVE_CTS_OFFSETS))
                 ffio_wfourcc(pb, "iso6");
+            if (has_av1)
+                ffio_wfourcc(pb, "av01");
         } else {
             if (mov->flags & FF_MOV_FLAG_FRAGMENT)
                 ffio_wfourcc(pb, "iso6");
@@ -5582,6 +5586,22 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
             goto end;
         avio_write(pb, pkt->data, size);
 #endif
+    } else if (par->codec_id == AV_CODEC_ID_EIA_608) {
+        size = 8;
+
+        for (int i = 0; i < pkt->size; i += 3) {
+            if (pkt->data[i] == 0xFC) {
+                size += 2;
+            }
+        }
+        avio_wb32(pb, size);
+        ffio_wfourcc(pb, "cdat");
+        for (int i = 0; i < pkt->size; i += 3) {
+            if (pkt->data[i] == 0xFC) {
+                avio_w8(pb, pkt->data[i + 1]);
+                avio_w8(pb, pkt->data[i + 2]);
+            }
+        }
     } else {
         if (trk->cenc.aes_ctr) {
             if (par->codec_id == AV_CODEC_ID_H264 && par->extradata_size > 4) {

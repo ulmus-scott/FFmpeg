@@ -20,7 +20,8 @@ Procedure for FFmpeg resync
 git pull
 - Clone MythTV FFmpeg fork into a new directory:
 git clone git@github.com:MythTV/FFmpeg.git
-- create a branch to track the current ffmpeg release branch (e.g release/4.0)
+- create a branch to track the latest ffmpeg release branch (e.g release/4.2)
+git branch --track release/4.2 remotes/origin/release/4.2
 - Add a remote for main FFmpeg
 git remote add ffmpeg git@github.com:FFmpeg/FFmpeg.git
 git fetch ffmpeg

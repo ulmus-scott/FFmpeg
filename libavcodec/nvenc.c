@@ -31,6 +31,7 @@
 #include "libavutil/mem.h"
 #include "libavutil/pixdesc.h"
 #include "internal.h"
+#include "packet_internal.h"
 
 #define CHECK_CU(x) FF_CUDA_CHECK_DL(avctx, dl_fn->cuda_dl, x)
 
@@ -53,6 +54,16 @@ const enum AVPixelFormat ff_nvenc_pix_fmts[] = {
     AV_PIX_FMT_D3D11,
 #endif
     AV_PIX_FMT_NONE
+};
+
+const AVCodecHWConfigInternal *ff_nvenc_hw_configs[] = {
+    HW_CONFIG_ENCODER_FRAMES(CUDA,  CUDA),
+    HW_CONFIG_ENCODER_DEVICE(NONE,  CUDA),
+#if CONFIG_D3D11VA
+    HW_CONFIG_ENCODER_FRAMES(D3D11, D3D11VA),
+    HW_CONFIG_ENCODER_DEVICE(NONE,  D3D11VA),
+#endif
+    NULL,
 };
 
 #define IS_10BIT(pix_fmt)  (pix_fmt == AV_PIX_FMT_P010    || \
@@ -937,12 +948,17 @@ static av_cold void nvenc_setup_rate_control(AVCodecContext *avctx)
     if (ctx->zerolatency)
         ctx->encode_config.rcParams.zeroReorderDelay = 1;
 
-    if (ctx->quality)
-    {
+    if (ctx->quality) {
         //convert from float to fixed point 8.8
         int tmp_quality = (int)(ctx->quality * 256.0f);
         ctx->encode_config.rcParams.targetQuality = (uint8_t)(tmp_quality >> 8);
         ctx->encode_config.rcParams.targetQualityLSB = (uint8_t)(tmp_quality & 0xff);
+
+        av_log(avctx, AV_LOG_VERBOSE, "CQ(%d) mode enabled.\n", tmp_quality);
+
+        //CQ mode shall discard avg bitrate & honor max bitrate;
+        ctx->encode_config.rcParams.averageBitRate = avctx->bit_rate = 0;
+        ctx->encode_config.rcParams.maxBitRate = avctx->rc_max_rate;
     }
 }
 
@@ -1199,8 +1215,13 @@ static av_cold int nvenc_setup_encoder(AVCodecContext *avctx)
     ctx->init_encode_params.darHeight = dh;
     ctx->init_encode_params.darWidth = dw;
 
-    ctx->init_encode_params.frameRateNum = avctx->time_base.den;
-    ctx->init_encode_params.frameRateDen = avctx->time_base.num * avctx->ticks_per_frame;
+    if (avctx->framerate.num > 0 && avctx->framerate.den > 0) {
+        ctx->init_encode_params.frameRateNum = avctx->framerate.num;
+        ctx->init_encode_params.frameRateDen = avctx->framerate.den;
+    } else {
+        ctx->init_encode_params.frameRateNum = avctx->time_base.den;
+        ctx->init_encode_params.frameRateDen = avctx->time_base.num * avctx->ticks_per_frame;
+    }
 
     ctx->init_encode_params.enableEncodeAsync = 0;
     ctx->init_encode_params.enablePTD = 1;
@@ -1234,9 +1255,6 @@ static av_cold int nvenc_setup_encoder(AVCodecContext *avctx)
         ctx->encode_config.frameIntervalP = 0;
         ctx->encode_config.gopLength = 1;
     }
-
-    ctx->initial_pts[0] = AV_NOPTS_VALUE;
-    ctx->initial_pts[1] = AV_NOPTS_VALUE;
 
     nvenc_recalc_surfaces(avctx);
 
@@ -1809,29 +1827,9 @@ static int nvenc_set_timestamp(AVCodecContext *avctx,
     NvencContext *ctx = avctx->priv_data;
 
     pkt->pts = params->outputTimeStamp;
-
-    /* generate the first dts by linearly extrapolating the
-     * first two pts values to the past */
-    if (avctx->max_b_frames > 0 && !ctx->first_packet_output &&
-        ctx->initial_pts[1] != AV_NOPTS_VALUE) {
-        int64_t ts0 = ctx->initial_pts[0], ts1 = ctx->initial_pts[1];
-        int64_t delta;
-
-        if ((ts0 < 0 && ts1 > INT64_MAX + ts0) ||
-            (ts0 > 0 && ts1 < INT64_MIN + ts0))
-            return AVERROR(ERANGE);
-        delta = ts1 - ts0;
-
-        if ((delta < 0 && ts0 > INT64_MAX + delta) ||
-            (delta > 0 && ts0 < INT64_MIN + delta))
-            return AVERROR(ERANGE);
-        pkt->dts = ts0 - delta;
-
-        ctx->first_packet_output = 1;
-        return 0;
-    }
-
     pkt->dts = timestamp_queue_dequeue(ctx->timestamp_list);
+
+    pkt->dts -= FFMAX(avctx->max_b_frames, 0) * FFMIN(avctx->ticks_per_frame, 1);
 
     return 0;
 }
@@ -1881,7 +1879,11 @@ static int process_output_surface(AVCodecContext *avctx, AVPacket *pkt, NvencSur
         goto error;
     }
 
-    if (res = ff_alloc_packet2(avctx, pkt, lock_params.bitstreamSizeInBytes,0)) {
+    res = pkt->data ?
+        ff_alloc_packet2(avctx, pkt, lock_params.bitstreamSizeInBytes, lock_params.bitstreamSizeInBytes) :
+        av_new_packet(pkt, lock_params.bitstreamSizeInBytes);
+
+    if (res < 0) {
         p_nvenc->nvEncUnlockBitstream(ctx->nvencoder, tmpoutsurf->output_surface);
         goto error;
     }
@@ -1965,12 +1967,6 @@ static int output_ready(AVCodecContext *avctx, int flush)
 {
     NvencContext *ctx = avctx->priv_data;
     int nb_ready, nb_pending;
-
-    /* when B-frames are enabled, we wait for two initial timestamps to
-     * calculate the first dts */
-    if (!flush && avctx->max_b_frames > 0 &&
-        (ctx->initial_pts[0] == AV_NOPTS_VALUE || ctx->initial_pts[1] == AV_NOPTS_VALUE))
-        return 0;
 
     nb_ready   = av_fifo_size(ctx->output_surface_ready_queue)   / sizeof(NvencSurface*);
     nb_pending = av_fifo_size(ctx->output_surface_queue)         / sizeof(NvencSurface*);
@@ -2094,9 +2090,6 @@ int ff_nvenc_send_frame(AVCodecContext *avctx, const AVFrame *frame)
             return AVERROR_EOF;
 
         ctx->encoder_flushing = 0;
-        ctx->first_packet_output = 0;
-        ctx->initial_pts[0] = AV_NOPTS_VALUE;
-        ctx->initial_pts[1] = AV_NOPTS_VALUE;
         av_fifo_reset(ctx->timestamp_list);
     }
 
@@ -2181,11 +2174,6 @@ int ff_nvenc_send_frame(AVCodecContext *avctx, const AVFrame *frame)
     if (frame) {
         av_fifo_generic_write(ctx->output_surface_queue, &in_surf, sizeof(in_surf), NULL);
         timestamp_queue_enqueue(ctx->timestamp_list, frame->pts);
-
-        if (ctx->initial_pts[0] == AV_NOPTS_VALUE)
-            ctx->initial_pts[0] = frame->pts;
-        else if (ctx->initial_pts[1] == AV_NOPTS_VALUE)
-            ctx->initial_pts[1] = frame->pts;
     }
 
     /* all the pending buffers are now ready for output */
@@ -2257,4 +2245,9 @@ int ff_nvenc_encode_frame(AVCodecContext *avctx, AVPacket *pkt,
     }
 
     return 0;
+}
+
+av_cold void ff_nvenc_encode_flush(AVCodecContext *avctx)
+{
+    ff_nvenc_send_frame(avctx, NULL);
 }

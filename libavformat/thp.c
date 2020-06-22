@@ -93,6 +93,9 @@ static int thp_read_header(AVFormatContext *s)
     avio_seek (pb, thp->compoff, SEEK_SET);
     thp->compcount       = avio_rb32(pb);
 
+    if (thp->compcount > FF_ARRAY_ELEMS(thp->components))
+        return AVERROR_INVALIDDATA;
+
     /* Read the list of component types.  */
     avio_read(pb, thp->components, 16);
 
@@ -145,6 +148,9 @@ static int thp_read_header(AVFormatContext *s)
         }
     }
 
+    if (!thp->vst)
+        return AVERROR_INVALIDDATA;
+
     return 0;
 }
 
@@ -181,7 +187,6 @@ static int thp_read_packet(AVFormatContext *s,
         if (ret < 0)
             return ret;
         if (ret != size) {
-            av_packet_unref(pkt);
             return AVERROR(EIO);
         }
 
@@ -191,7 +196,6 @@ static int thp_read_packet(AVFormatContext *s,
         if (ret < 0)
             return ret;
         if (ret != thp->audiosize) {
-            av_packet_unref(pkt);
             return AVERROR(EIO);
         }
 

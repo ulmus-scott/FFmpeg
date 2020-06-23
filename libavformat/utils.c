@@ -1571,8 +1571,6 @@ static int read_frame_internal(AVFormatContext *s, AVPacket *pkt)
     while (!got_packet && !s->internal->parse_queue) {
         AVStream *st;
 
-        av_init_packet(&cur_pkt);
-
         /* read next packet */
         ret = ff_read_packet(s, pkt);
         if (ret < 0) {

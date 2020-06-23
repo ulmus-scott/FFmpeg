@@ -1605,8 +1605,6 @@ static int read_frame_internal(AVFormatContext *s, AVPacket *pkt)
     while (!got_packet && !s->internal->parse_queue) {
         AVStream *st;
 
-        av_init_packet(&cur_pkt);
-
         /* read next packet */
         ret = ff_read_packet(s, pkt);
         if (ret < 0) {
@@ -2991,7 +2989,7 @@ static const char *duration_estimate_name(enum AVDurationEstimationMethod method
     return duration_name[method];
 }
 
-static void estimate_timings(AVFormatContext *ic, int64_t old_offset)
+void estimate_timings(AVFormatContext *ic, int64_t old_offset)
 {
     int64_t file_size;
 

@@ -74,6 +74,9 @@ static inline int get_ue_golomb(GetBitContext *gb)
     }
 #else
     OPEN_READER(re, gb);
+    /* MythTV: clang-tidy warns "Access to field 'l' results in a
+     * dereference of a null pointer".  No plans to investigate.
+     * NOLINTNEXTLINE(clang-analyzer-core.NullDereference) */
     UPDATE_CACHE(re, gb);
     buf = GET_CACHE(re, gb);
 

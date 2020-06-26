@@ -29,6 +29,10 @@
 
 #include <stdint.h>
 
+/* MythTV: Prevent "ISO C++17 does not allow ‘register’ storage class
+ * specifier" warning. */
+#define register
+
 #include "libavutil/common.h"
 #include "libavutil/intreadwrite.h"
 #include "libavutil/log.h"
@@ -647,6 +651,9 @@ static inline int init_get_bits_xe(GetBitContext *s, const uint8_t *buffer,
     s->cache              = 0;
     s->bits_left          = 0;
     refill_64(s, is_le);
+#else
+    /* MythTV: Fix unused parameter warning. */
+    (void)is_le;
 #endif
 
     return ret;

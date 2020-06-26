@@ -408,6 +408,9 @@ static inline unsigned int get_bits(GetBitContext *s, int n)
 #else
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
+    /* MythTV: clang-tidy warns "Access to field 'l' results in a
+     * dereference of a null pointer".  No plans to investigate.
+     * NOLINTNEXTLINE(clang-analyzer-core.NullDereference) */
     UPDATE_CACHE(re, s);
     tmp = SHOW_UBITS(re, s, n);
     LAST_SKIP_BITS(re, s, n);

@@ -65,7 +65,6 @@ static int scc_read_header(AVFormatContext *s)
     AVStream *st = avformat_new_stream(s, NULL);
     char line2[4096], line[4096];
     int64_t pos, ts, next_ts = AV_NOPTS_VALUE;
-    int ret = 0;
     ptrdiff_t len;
     uint8_t out[4096];
     FFTextReader tr;
@@ -140,7 +139,7 @@ static int scc_read_header(AVFormatContext *s)
             lline = NULL;
 
             if (i > 12 && o1 == 0x94 && o2 == 0x20 && saveptr &&
-                (av_strncasecmp(saveptr, "942f", 4) || !av_strncasecmp(saveptr, "942c", 4))) {
+                (av_strncasecmp(saveptr, "942f", 4) && !av_strncasecmp(saveptr, "942c", 4))) {
 
                 out[i] = 0;
 
@@ -175,7 +174,7 @@ static int scc_read_header(AVFormatContext *s)
 
     ff_subtitles_queue_finalize(s, &scc->q);
 
-    return ret;
+    return 0;
 fail:
     ff_subtitles_queue_clean(&scc->q);
     return AVERROR(ENOMEM);

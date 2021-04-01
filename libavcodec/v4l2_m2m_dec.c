@@ -23,12 +23,17 @@
 
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
+
+#include "libavutil/hwcontext.h"
+#include "libavutil/hwcontext_drm.h"
 #include "libavutil/pixfmt.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/opt.h"
 #include "libavcodec/avcodec.h"
 #include "codec_internal.h"
 #include "libavcodec/decode.h"
+#include "libavcodec/internal.h"
+#include "libavcodec/hwconfig.h"
 
 #include "v4l2_context.h"
 #include "v4l2_m2m.h"
@@ -205,7 +210,44 @@ static av_cold int v4l2_decode_init(AVCodecContext *avctx)
     capture->av_codec_id = AV_CODEC_ID_RAWVIDEO;
     capture->av_pix_fmt = avctx->pix_fmt;
 
+    /* the client requests the codec to generate DRM frames:
+     *   - data[0] will therefore point to the returned AVDRMFrameDescriptor
+     *       check the ff_v4l2_buffer_to_avframe conversion function.
+     *   - the DRM frame format is passed in the DRM frame descriptor layer.
+     *       check the v4l2_get_drm_frame function.
+     */
+    {
+    const enum AVPixelFormat *pix_fmts = NULL;
+    int num_pix_fmts = 0;
+    ret = avcodec_get_supported_config(avctx, NULL, AV_CODEC_CONFIG_PIX_FORMAT,
+                                       0, (const void **) &pix_fmts, &num_pix_fmts);
+    if (ret < 0)
+        return ret;
+    if (pix_fmts == NULL || num_pix_fmts < 1)
+        return -1;
+    switch (ff_get_format(avctx, pix_fmts)) {
+    case AV_PIX_FMT_DRM_PRIME:
+        s->output_drm = 1;
+        break;
+    case AV_PIX_FMT_NONE:
+        return 0;
+        break;
+    default:
+        break;
+    }
+    }
+
+    s->device_ref = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_DRM);
+    if (!s->device_ref) {
+        ret = AVERROR(ENOMEM);
+        return ret;
+    }
+
     s->avctx = avctx;
+    ret = av_hwdevice_ctx_init(s->device_ref);
+    if (ret < 0)
+        return ret;
+
     ret = ff_v4l2_m2m_codec_init(priv);
     if (ret) {
         av_log(avctx, AV_LOG_ERROR, "can't configure decoder\n");
@@ -220,6 +262,16 @@ static av_cold int v4l2_decode_close(AVCodecContext *avctx)
     return ff_v4l2_m2m_codec_end(avctx->priv_data);
 }
 
+static void v4l2_flush(AVCodecContext *avctx)
+{
+    V4L2m2mPriv *priv = avctx->priv_data;
+    V4L2m2mContext* s = priv->context;
+
+    /* wait for pending buffer references */
+    if (atomic_load(&s->refcount))
+        while(sem_wait(&s->refsync) == -1 && errno == EINTR);
+}
+
 #define OFFSET(x) offsetof(V4L2m2mPriv, x)
 #define FLAGS AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_DECODING_PARAM
 
@@ -228,6 +280,11 @@ static const AVOption options[] = {
     { "num_capture_buffers", "Number of buffers in the capture context",
         OFFSET(num_capture_buffers), AV_OPT_TYPE_INT, {.i64 = 20}, 2, INT_MAX, FLAGS },
     { NULL},
+};
+
+static const AVCodecHWConfigInternal *v4l2_m2m_hw_configs[] = {
+    HW_CONFIG_INTERNAL(DRM_PRIME),
+    NULL
 };
 
 #define M2MDEC_CLASS(NAME) \
@@ -250,7 +307,12 @@ static const AVOption options[] = {
         .init           = v4l2_decode_init, \
         FF_CODEC_RECEIVE_FRAME_CB(v4l2_receive_frame), \
         .close          = v4l2_decode_close, \
+        .flush          = v4l2_flush, \
+        .p.pix_fmts       = (const enum AVPixelFormat[]) { AV_PIX_FMT_DRM_PRIME, \
+                                                         AV_PIX_FMT_NV12, \
+                                                         AV_PIX_FMT_NONE}, \
         .bsfs           = bsf_name, \
+        .hw_configs     = v4l2_m2m_hw_configs, \
         .p.capabilities = AV_CODEC_CAP_HARDWARE | AV_CODEC_CAP_DELAY | AV_CODEC_CAP_AVOID_PROBING, \
         .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE | \
                           FF_CODEC_CAP_INIT_CLEANUP, \

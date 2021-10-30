@@ -286,6 +286,11 @@ static int decode_main_header(NUTContext *nut)
             ret = AVERROR_INVALIDDATA;
             goto fail;
         }
+        if (tmp_size < 0 || tmp_size > INT_MAX - count) {
+            av_log(s, AV_LOG_ERROR, "illegal size\n");
+            ret = AVERROR_INVALIDDATA;
+            goto fail;
+        }
 
         for (j = 0; j < count; j++, i++) {
             if (i == 'N') {
@@ -1235,15 +1240,15 @@ static int read_seek(AVFormatContext *s, int stream_index,
         return AVERROR(ENOSYS);
     }
 
-    if (st->internal->index_entries) {
+    if (st->index_entries) {
         int index = av_index_search_timestamp(st, pts, flags);
         if (index < 0)
             index = av_index_search_timestamp(st, pts, flags ^ AVSEEK_FLAG_BACKWARD);
         if (index < 0)
             return -1;
 
-        pos2 = st->internal->index_entries[index].pos;
-        ts   = st->internal->index_entries[index].timestamp;
+        pos2 = st->index_entries[index].pos;
+        ts   = st->index_entries[index].timestamp;
     } else {
         av_tree_find(nut->syncpoints, &dummy, ff_nut_sp_pts_cmp,
                      (void **) next_node);

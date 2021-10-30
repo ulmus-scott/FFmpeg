@@ -223,7 +223,7 @@ static int pp_bnk_read_header(AVFormatContext *s)
         par->bits_per_coded_sample  = 4;
         par->bits_per_raw_sample    = 16;
         par->block_align            = 1;
-        par->bit_rate               = par->sample_rate * par->bits_per_coded_sample * par->channels;
+        par->bit_rate               = par->sample_rate * (int64_t)par->bits_per_coded_sample * par->channels;
 
         avpriv_set_pts_info(st, 64, 1, par->sample_rate);
         st->start_time              = 0;
@@ -265,28 +265,24 @@ static int pp_bnk_read_packet(AVFormatContext *s, AVPacket *pkt)
 
         size = FFMIN(trk->data_size - trk->bytes_read, PP_BNK_MAX_READ_SIZE);
 
-        if (!ctx->is_music)
-            ret = av_new_packet(pkt, size);
-        else if (ctx->current_track == 0)
-            ret = av_new_packet(pkt, size * 2);
-        else
-            ret = 0;
-
+        if (!ctx->is_music) {
+            ret = av_get_packet(s->pb, pkt, size);
+            if (ret == AVERROR_EOF) {
+                /* If we've hit EOF, don't attempt this track again. */
+                trk->data_size = trk->bytes_read;
+                continue;
+            }
+        } else {
+            if (!pkt->data && (ret = av_new_packet(pkt, size * 2)) < 0)
+                return ret;
+            ret = avio_read(s->pb, pkt->data + size * ctx->current_track, size);
+            if (ret >= 0 && ret != size) {
+                /* Only return stereo packets if both tracks could be read. */
+                ret = AVERROR_EOF;
+            }
+        }
         if (ret < 0)
             return ret;
-
-        if (ctx->is_music)
-            ret = avio_read(s->pb, pkt->data + size * ctx->current_track, size);
-        else
-            ret = avio_read(s->pb, pkt->data, size);
-
-        if (ret == AVERROR_EOF) {
-            /* If we've hit EOF, don't attempt this track again. */
-            trk->data_size = trk->bytes_read;
-            continue;
-        } else if (ret < 0) {
-            return ret;
-        }
 
         trk->bytes_read    += ret;
         pkt->flags         &= ~AV_PKT_FLAG_CORRUPT;
@@ -298,8 +294,6 @@ static int pp_bnk_read_packet(AVFormatContext *s, AVPacket *pkt)
                 continue;
 
             pkt->stream_index = 0;
-        } else {
-            pkt->size = ret;
         }
 
         ctx->current_track++;
@@ -319,6 +313,25 @@ static int pp_bnk_read_close(AVFormatContext *s)
     return 0;
 }
 
+static int pp_bnk_seek(AVFormatContext *s, int stream_index,
+                       int64_t pts, int flags)
+{
+    PPBnkCtx *ctx = s->priv_data;
+
+    if (pts != 0)
+        return AVERROR(EINVAL);
+
+    if (ctx->is_music) {
+        av_assert0(stream_index == 0);
+        ctx->tracks[0].bytes_read = 0;
+        ctx->tracks[1].bytes_read = 0;
+    } else {
+        ctx->tracks[stream_index].bytes_read = 0;
+    }
+
+    return 0;
+}
+
 AVInputFormat ff_pp_bnk_demuxer = {
     .name           = "pp_bnk",
     .long_name      = NULL_IF_CONFIG_SMALL("Pro Pinball Series Soundbank"),
@@ -326,5 +339,6 @@ AVInputFormat ff_pp_bnk_demuxer = {
     .read_probe     = pp_bnk_probe,
     .read_header    = pp_bnk_read_header,
     .read_packet    = pp_bnk_read_packet,
-    .read_close     = pp_bnk_read_close
+    .read_close     = pp_bnk_read_close,
+    .read_seek      = pp_bnk_seek,
 };

@@ -509,9 +509,13 @@ FF_ENABLE_DEPRECATION_WARNINGS
     if (!s->fixed_qscale &&
         avctx->bit_rate * av_q2d(avctx->time_base) >
             avctx->bit_rate_tolerance) {
+        double nbt = avctx->bit_rate * av_q2d(avctx->time_base) * 5;
         av_log(avctx, AV_LOG_WARNING,
                "bitrate tolerance %d too small for bitrate %"PRId64", overriding\n", avctx->bit_rate_tolerance, avctx->bit_rate);
-        avctx->bit_rate_tolerance = 5 * avctx->bit_rate * av_q2d(avctx->time_base);
+        if (nbt <= INT_MAX) {
+            avctx->bit_rate_tolerance = nbt;
+        } else
+            avctx->bit_rate_tolerance = INT_MAX;
     }
 
     if (avctx->rc_max_rate &&
@@ -627,7 +631,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
 #if FF_API_PRIVATE_OPT
     FF_DISABLE_DEPRECATION_WARNINGS
     if (avctx->mpeg_quant)
-        s->mpeg_quant = avctx->mpeg_quant;
+        s->mpeg_quant = 1;
     FF_ENABLE_DEPRECATION_WARNINGS
 #endif
 
@@ -1008,8 +1012,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     if (CONFIG_H263_ENCODER && s->out_format == FMT_H263)
         ff_h263_encode_init(s);
     if (CONFIG_MSMPEG4_ENCODER && s->msmpeg4_version)
-        if ((ret = ff_msmpeg4_encode_init(s)) < 0)
-            return ret;
+        ff_msmpeg4_encode_init(s);
     if ((CONFIG_MPEG1VIDEO_ENCODER || CONFIG_MPEG2VIDEO_ENCODER)
         && s->out_format == FMT_MPEG1)
         ff_mpeg1_encode_init(s);
@@ -1696,7 +1699,8 @@ no_output_pic:
             // input is not a shared pix -> reuse buffer for current_pix
             s->current_picture_ptr = s->reordered_input_picture[0];
             for (i = 0; i < 4; i++) {
-                s->new_picture.f->data[i] += INPLACE_OFFSET;
+                if (s->new_picture.f->data[i])
+                    s->new_picture.f->data[i] += INPLACE_OFFSET;
             }
         }
         ff_mpeg_unref_picture(s->avctx, &s->current_picture);
@@ -2016,6 +2020,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
             break;
             default:
                 av_log(avctx, AV_LOG_ERROR, "vbv buffer overflow\n");
+                s->stuffing_bits = 0;
             }
             flush_put_bits(&s->pb);
             s->frame_bits  = put_bits_count(&s->pb);

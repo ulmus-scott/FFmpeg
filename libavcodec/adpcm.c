@@ -100,7 +100,7 @@ static const int8_t mtf_index_table[16] = {
 typedef struct ADPCMDecodeContext {
     ADPCMChannelStatus status[14];
     int vqa_version;                /**< VQA version. Used for ADPCM_IMA_WS */
-    int has_status;
+    int has_status;                 /**< Status flag. Reset to 0 after a flush. */
 } ADPCMDecodeContext;
 
 static av_cold int adpcm_decode_init(AVCodecContext * avctx)
@@ -1811,11 +1811,6 @@ static int adpcm_decode_frame(AVCodecContext *avctx, void *data,
         }
         break;
     case AV_CODEC_ID_ADPCM_AICA:
-        if (!c->has_status) {
-            for (channel = 0; channel < avctx->channels; channel++)
-                c->status[channel].step = 0;
-            c->has_status = 1;
-        }
         for (channel = 0; channel < avctx->channels; channel++) {
             samples = samples_p[channel];
             for (n = nb_samples >> 1; n > 0; n--) {
@@ -2077,13 +2072,6 @@ static int adpcm_decode_frame(AVCodecContext *avctx, void *data,
         }
         break;
     case AV_CODEC_ID_ADPCM_ZORK:
-        if (!c->has_status) {
-            for (channel = 0; channel < avctx->channels; channel++) {
-                c->status[channel].predictor  = 0;
-                c->status[channel].step_index = 0;
-            }
-            c->has_status = 1;
-        }
         for (n = 0; n < nb_samples * avctx->channels; n++) {
             int v = bytestream2_get_byteu(&gb);
             *samples++ = adpcm_zork_expand_nibble(&c->status[n % avctx->channels], v);
@@ -2121,7 +2109,37 @@ static int adpcm_decode_frame(AVCodecContext *avctx, void *data,
 static void adpcm_flush(AVCodecContext *avctx)
 {
     ADPCMDecodeContext *c = avctx->priv_data;
-    c->has_status = 0;
+
+    switch(avctx->codec_id) {
+    case AV_CODEC_ID_ADPCM_AICA:
+        for (int channel = 0; channel < avctx->channels; channel++)
+            c->status[channel].step = 0;
+        break;
+
+    case AV_CODEC_ID_ADPCM_ARGO:
+        for (int channel = 0; channel < avctx->channels; channel++) {
+            c->status[channel].sample1 = 0;
+            c->status[channel].sample2 = 0;
+        }
+        break;
+
+    case AV_CODEC_ID_ADPCM_IMA_ALP:
+    case AV_CODEC_ID_ADPCM_IMA_CUNNING:
+    case AV_CODEC_ID_ADPCM_IMA_SSI:
+    case AV_CODEC_ID_ADPCM_ZORK:
+        for (int channel = 0; channel < avctx->channels; channel++) {
+            c->status[channel].predictor  = 0;
+            c->status[channel].step_index = 0;
+        }
+        break;
+
+    default:
+        /* Other codecs may want to handle this during decoding. */
+        c->has_status = 0;
+        return;
+    }
+
+    c->has_status = 1;
 }
 
 

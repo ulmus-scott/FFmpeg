@@ -1230,7 +1230,9 @@ static void update_initial_durations(AVFormatContext *s, AVStream *st,
             (pktl->pkt.dts == AV_NOPTS_VALUE ||
              pktl->pkt.dts == st->first_dts ||
              pktl->pkt.dts == RELATIVE_TS_BASE) &&
-            !pktl->pkt.duration) {
+            !pktl->pkt.duration &&
+            av_sat_add64(cur_dts, duration) == cur_dts + (uint64_t)duration
+        ) {
             pktl->pkt.dts = cur_dts;
             if (!st->internal->avctx->has_b_frames)
                 pktl->pkt.pts = cur_dts;
@@ -1297,7 +1299,7 @@ static void compute_pkt_fields(AVFormatContext *s, AVStream *st,
         presentation_delayed = 1;
 
     if (pkt->pts != AV_NOPTS_VALUE && pkt->dts != AV_NOPTS_VALUE &&
-        st->pts_wrap_bits < 63 && pkt->dts > INT64_MIN + (1LL << (st->pts_wrap_bits - 1)) &&
+        st->pts_wrap_bits < 63 && pkt->dts > INT64_MIN + (1LL << st->pts_wrap_bits) &&
         pkt->dts - (1LL << (st->pts_wrap_bits - 1)) > pkt->pts) {
         if (is_relative(st->cur_dts) || pkt->dts - (1LL<<(st->pts_wrap_bits - 1)) > st->cur_dts) {
             pkt->dts -= 1LL << st->pts_wrap_bits;
@@ -1974,11 +1976,11 @@ void ff_reduce_index(AVFormatContext *s, int stream_index)
     AVStream *st             = s->streams[stream_index];
     unsigned int max_entries = s->max_index_size / sizeof(AVIndexEntry);
 
-    if ((unsigned) st->internal->nb_index_entries >= max_entries) {
+    if ((unsigned) st->nb_index_entries >= max_entries) {
         int i;
-        for (i = 0; 2 * i < st->internal->nb_index_entries; i++)
-            st->internal->index_entries[i] = st->internal->index_entries[2 * i];
-        st->internal->nb_index_entries = i;
+        for (i = 0; 2 * i < st->nb_index_entries; i++)
+            st->index_entries[i] = st->index_entries[2 * i];
+        st->nb_index_entries = i;
     }
 }
 
@@ -2045,8 +2047,8 @@ int av_add_index_entry(AVStream *st, int64_t pos, int64_t timestamp,
                        int size, int distance, int flags)
 {
     timestamp = wrap_timestamp(st, timestamp);
-    return ff_add_index_entry(&st->internal->index_entries, &st->internal->nb_index_entries,
-                              &st->internal->index_entries_allocated_size, pos,
+    return ff_add_index_entry(&st->index_entries, &st->nb_index_entries,
+                              &st->index_entries_allocated_size, pos,
                               timestamp, size, distance, flags);
 }
 
@@ -2122,13 +2124,13 @@ void ff_configure_buffers_for_index(AVFormatContext *s, int64_t time_tolerance)
             if (ist1 == ist2)
                 continue;
 
-            for (i1 = i2 = 0; i1 < st1->internal->nb_index_entries; i1++) {
-                AVIndexEntry *e1 = &st1->internal->index_entries[i1];
+            for (i1 = i2 = 0; i1 < st1->nb_index_entries; i1++) {
+                AVIndexEntry *e1 = &st1->index_entries[i1];
                 int64_t e1_pts = av_rescale_q(e1->timestamp, st1->time_base, AV_TIME_BASE_Q);
 
                 skip = FFMAX(skip, e1->size);
-                for (; i2 < st2->internal->nb_index_entries; i2++) {
-                    AVIndexEntry *e2 = &st2->internal->index_entries[i2];
+                for (; i2 < st2->nb_index_entries; i2++) {
+                    AVIndexEntry *e2 = &st2->index_entries[i2];
                     int64_t e2_pts = av_rescale_q(e2->timestamp, st2->time_base, AV_TIME_BASE_Q);
                     if (e2_pts < e1_pts || e2_pts - (uint64_t)e1_pts < time_tolerance)
                         continue;
@@ -2160,7 +2162,7 @@ void ff_configure_buffers_for_index(AVFormatContext *s, int64_t time_tolerance)
 
 int av_index_search_timestamp(AVStream *st, int64_t wanted_timestamp, int flags)
 {
-    return ff_index_search_timestamp(st->internal->index_entries, st->internal->nb_index_entries,
+    return ff_index_search_timestamp(st->index_entries, st->nb_index_entries,
                                      wanted_timestamp, flags);
 }
 
@@ -2193,7 +2195,7 @@ int ff_seek_frame_binary(AVFormatContext *s, int stream_index,
     pos_limit = -1; // GCC falsely says it may be uninitialized.
 
     st = s->streams[stream_index];
-    if (st->internal->index_entries) {
+    if (st->index_entries) {
         AVIndexEntry *e;
 
         /* FIXME: Whole function must be checked for non-keyframe entries in
@@ -2201,7 +2203,7 @@ int ff_seek_frame_binary(AVFormatContext *s, int stream_index,
         index = av_index_search_timestamp(st, target_ts,
                                           flags | AVSEEK_FLAG_BACKWARD);
         index = FFMAX(index, 0);
-        e     = &st->internal->index_entries[index];
+        e     = &st->index_entries[index];
 
         if (e->timestamp <= target_ts || e->pos == e->min_distance) {
             pos_min = e->pos;
@@ -2214,9 +2216,9 @@ int ff_seek_frame_binary(AVFormatContext *s, int stream_index,
 
         index = av_index_search_timestamp(st, target_ts,
                                           flags & ~AVSEEK_FLAG_BACKWARD);
-        av_assert0(index < st->internal->nb_index_entries);
+        av_assert0(index < st->nb_index_entries);
         if (index >= 0) {
-            e = &st->internal->index_entries[index];
+            e = &st->index_entries[index];
             av_assert1(e->timestamp >= target_ts);
             pos_max   = e->pos;
             ts_max    = e->timestamp;
@@ -2417,17 +2419,17 @@ static int seek_frame_generic(AVFormatContext *s, int stream_index,
 
     index = av_index_search_timestamp(st, timestamp, flags);
 
-    if (index < 0 && st->internal->nb_index_entries &&
-        timestamp < st->internal->index_entries[0].timestamp)
+    if (index < 0 && st->nb_index_entries &&
+        timestamp < st->index_entries[0].timestamp)
         return -1;
 
-    if (index < 0 || index == st->internal->nb_index_entries - 1) {
+    if (index < 0 || index == st->nb_index_entries - 1) {
         AVPacket *pkt = s->internal->pkt;
         int nonkey = 0;
 
-        if (st->internal->nb_index_entries) {
-            av_assert0(st->internal->index_entries);
-            ie = &st->internal->index_entries[st->internal->nb_index_entries - 1];
+        if (st->nb_index_entries) {
+            av_assert0(st->index_entries);
+            ie = &st->index_entries[st->nb_index_entries - 1];
             if ((ret = avio_seek(s->pb, ie->pos, SEEK_SET)) < 0)
                 return ret;
             ff_update_cur_dts(s, st, ie->timestamp);
@@ -2465,7 +2467,7 @@ static int seek_frame_generic(AVFormatContext *s, int stream_index,
     if (s->iformat->read_seek)
         if (s->iformat->read_seek(s, stream_index, timestamp, flags) >= 0)
             return 0;
-    ie = &st->internal->index_entries[index];
+    ie = &st->index_entries[index];
     if ((ret = avio_seek(s->pb, ie->pos, SEEK_SET)) < 0)
         return ret;
     ff_update_cur_dts(s, st, ie->timestamp);
@@ -3460,7 +3462,8 @@ void ff_rfps_calculate(AVFormatContext *ic)
         // the check for tb_unreliable() is not completely correct, since this is not about handling
         // an unreliable/inexact time base, but a time base that is finer than necessary, as e.g.
         // ipmovie.c produces.
-        if (tb_unreliable(st->internal->avctx) && st->internal->info->duration_count > 15 && st->internal->info->duration_gcd > FFMAX(1, st->time_base.den/(500LL*st->time_base.num)) && !st->r_frame_rate.num)
+        if (tb_unreliable(st->internal->avctx) && st->internal->info->duration_count > 15 && st->internal->info->duration_gcd > FFMAX(1, st->time_base.den/(500LL*st->time_base.num)) && !st->r_frame_rate.num &&
+            st->internal->info->duration_gcd < INT64_MAX / st->time_base.num)
             av_reduce(&st->r_frame_rate.num, &st->r_frame_rate.den, st->time_base.den, st->time_base.num * st->internal->info->duration_gcd, INT_MAX);
         if (st->internal->info->duration_count>1 && !st->r_frame_rate.num
             && tb_unreliable(st->internal->avctx)) {
@@ -3990,8 +3993,10 @@ FF_ENABLE_DEPRECATION_WARNINGS
                     av_packet_unref(pkt1);
                 break;
             }
-            if (pkt->duration) {
-                if (avctx->codec_type == AVMEDIA_TYPE_SUBTITLE && pkt->pts != AV_NOPTS_VALUE && st->start_time != AV_NOPTS_VALUE && pkt->pts >= st->start_time) {
+            if (pkt->duration > 0) {
+                if (avctx->codec_type == AVMEDIA_TYPE_SUBTITLE && pkt->pts != AV_NOPTS_VALUE && st->start_time != AV_NOPTS_VALUE && pkt->pts >= st->start_time
+                    && (uint64_t)pkt->pts - st->start_time < INT64_MAX
+                ) {
                     st->internal->info->codec_info_duration = FFMIN(pkt->pts - st->start_time, st->internal->info->codec_info_duration + pkt->duration);
                 } else
                     st->internal->info->codec_info_duration += pkt->duration;
@@ -4137,7 +4142,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
 
             if (!st->r_frame_rate.num) {
                 if (    avctx->time_base.den * (int64_t) st->time_base.num
-                    <= avctx->time_base.num * avctx->ticks_per_frame * (uint64_t) st->time_base.den) {
+                    <= avctx->time_base.num * (uint64_t)avctx->ticks_per_frame * st->time_base.den) {
                     av_reduce(&st->r_frame_rate.num, &st->r_frame_rate.den,
                               avctx->time_base.den, (int64_t)avctx->time_base.num * avctx->ticks_per_frame, INT_MAX);
                 } else {
@@ -4470,7 +4475,7 @@ static void free_stream(AVStream **pst)
         avcodec_free_context(&st->internal->avctx);
         av_bsf_free(&st->internal->bsfc);
         av_freep(&st->internal->priv_pts);
-        av_freep(&st->internal->index_entries);
+        av_freep(&st->index_entries);
         av_freep(&st->internal->probe_data.buf);
 
         av_bsf_free(&st->internal->extract_extradata.bsf);
@@ -4681,7 +4686,7 @@ fail:
 AVProgram *av_new_program(AVFormatContext *ac, int id)
 {
     AVProgram *program = NULL;
-    int i;
+    int i, ret;
 
     av_log(ac, AV_LOG_TRACE, "new_program: id=0x%04x\n", id);
 
@@ -4693,7 +4698,11 @@ AVProgram *av_new_program(AVFormatContext *ac, int id)
         program = av_mallocz(sizeof(AVProgram));
         if (!program)
             return NULL;
-        dynarray_add(&ac->programs, &ac->nb_programs, program);
+        ret = av_dynarray_add_nofree(&ac->programs, &ac->nb_programs, program);
+        if (ret < 0) {
+            av_free(program);
+            return NULL;
+        }
         program->discard = AVDISCARD_NONE;
         program->pmt_version = -1;
         program->id = id;
@@ -4713,7 +4722,7 @@ AVChapter *avpriv_new_chapter(AVFormatContext *s, int64_t id, AVRational time_ba
                               int64_t start, int64_t end, const char *title)
 {
     AVChapter *chapter = NULL;
-    int i;
+    int i, ret;
 
     if (end != AV_NOPTS_VALUE && start > end) {
         av_log(s, AV_LOG_ERROR, "Chapter end time %"PRId64" before start %"PRId64"\n", end, start);
@@ -4733,7 +4742,11 @@ AVChapter *avpriv_new_chapter(AVFormatContext *s, int64_t id, AVRational time_ba
         chapter = av_mallocz(sizeof(AVChapter));
         if (!chapter)
             return NULL;
-        dynarray_add(&s->chapters, &s->nb_chapters, chapter);
+        ret = av_dynarray_add_nofree(&s->chapters, &s->nb_chapters, chapter);
+        if (ret < 0) {
+            av_free(chapter);
+            return NULL;
+        }
     }
     av_dict_set(&chapter->metadata, "title", title, 0);
     chapter->id        = id;

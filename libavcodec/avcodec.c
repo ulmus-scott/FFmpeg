@@ -318,6 +318,13 @@ int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *code
         avctx->time_base.den = avctx->sample_rate;
     }
 
+    if (av_codec_is_encoder(avctx->codec))
+        ret = ff_encode_preinit(avctx);
+    else
+        ret = ff_decode_preinit(avctx);
+    if (ret < 0)
+        goto free_and_end;
+
     if (!HAVE_THREADS)
         av_log(avctx, AV_LOG_WARNING, "Warning: not compiled with thread support, using thread emulation\n");
 
@@ -338,13 +345,6 @@ int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *code
     }
     if (!HAVE_THREADS && !(codec->caps_internal & FF_CODEC_CAP_AUTO_THREADS))
         avctx->thread_count = 1;
-
-    if (av_codec_is_encoder(avctx->codec))
-        ret = ff_encode_preinit(avctx);
-    else
-        ret = ff_decode_preinit(avctx);
-    if (ret < 0)
-        goto free_and_end;
 
     if (   avctx->codec->init && (!(avctx->active_thread_type&FF_THREAD_FRAME)
         || avci->frame_thread_encoder)) {
@@ -644,6 +644,11 @@ FF_ENABLE_DEPRECATION_WARNINGS
     return 0;
 }
 
+static const char *unknown_if_null(const char *str)
+{
+    return str ? str : "unknown";
+}
+
 void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
 {
     const char *codec_type;
@@ -653,6 +658,7 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
     int new_line = 0;
     AVRational display_aspect_ratio;
     const char *separator = enc->dump_separator ? (const char *)enc->dump_separator : ", ";
+    const char *str;
 
     if (!buf || buf_size <= 0)
         return;
@@ -688,28 +694,27 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
             av_strlcat(buf, separator, buf_size);
 
             snprintf(buf + strlen(buf), buf_size - strlen(buf),
-                 "%s", enc->pix_fmt == AV_PIX_FMT_NONE ? "none" :
-                     av_get_pix_fmt_name(enc->pix_fmt));
+                     "%s", enc->pix_fmt == AV_PIX_FMT_NONE ? "none" :
+                     unknown_if_null(av_get_pix_fmt_name(enc->pix_fmt)));
             if (enc->bits_per_raw_sample && enc->pix_fmt != AV_PIX_FMT_NONE &&
                 enc->bits_per_raw_sample < av_pix_fmt_desc_get(enc->pix_fmt)->comp[0].depth)
                 av_strlcatf(detail, sizeof(detail), "%d bpc, ", enc->bits_per_raw_sample);
-            if (enc->color_range != AVCOL_RANGE_UNSPECIFIED)
-                av_strlcatf(detail, sizeof(detail), "%s, ",
-                            av_color_range_name(enc->color_range));
+            if (enc->color_range != AVCOL_RANGE_UNSPECIFIED &&
+                (str = av_color_range_name(enc->color_range)))
+                av_strlcatf(detail, sizeof(detail), "%s, ", str);
 
             if (enc->colorspace != AVCOL_SPC_UNSPECIFIED ||
                 enc->color_primaries != AVCOL_PRI_UNSPECIFIED ||
                 enc->color_trc != AVCOL_TRC_UNSPECIFIED) {
-                if (enc->colorspace != (int)enc->color_primaries ||
-                    enc->colorspace != (int)enc->color_trc) {
+                const char *col = unknown_if_null(av_color_space_name(enc->colorspace));
+                const char *pri = unknown_if_null(av_color_primaries_name(enc->color_primaries));
+                const char *trc = unknown_if_null(av_color_transfer_name(enc->color_trc));
+                if (strcmp(col, pri) || strcmp(col, trc)) {
                     new_line = 1;
                     av_strlcatf(detail, sizeof(detail), "%s/%s/%s, ",
-                                av_color_space_name(enc->colorspace),
-                                av_color_primaries_name(enc->color_primaries),
-                                av_color_transfer_name(enc->color_trc));
+                                col, pri, trc);
                 } else
-                    av_strlcatf(detail, sizeof(detail), "%s, ",
-                                av_get_colorspace_name(enc->colorspace));
+                    av_strlcatf(detail, sizeof(detail), "%s, ", col);
             }
 
             if (enc->field_order != AV_FIELD_UNKNOWN) {
@@ -727,9 +732,9 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
             }
 
             if (av_log_get_level() >= AV_LOG_VERBOSE &&
-                enc->chroma_sample_location != AVCHROMA_LOC_UNSPECIFIED)
-                av_strlcatf(detail, sizeof(detail), "%s, ",
-                            av_chroma_location_name(enc->chroma_sample_location));
+                enc->chroma_sample_location != AVCHROMA_LOC_UNSPECIFIED &&
+                (str = av_chroma_location_name(enc->chroma_sample_location)))
+                av_strlcatf(detail, sizeof(detail), "%s, ", str);
 
             if (strlen(detail) > 1) {
                 detail[strlen(detail) - 2] = 0;
@@ -787,9 +792,10 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
                      "%d Hz, ", enc->sample_rate);
         }
         av_get_channel_layout_string(buf + strlen(buf), buf_size - strlen(buf), enc->channels, enc->channel_layout);
-        if (enc->sample_fmt != AV_SAMPLE_FMT_NONE) {
+        if (enc->sample_fmt != AV_SAMPLE_FMT_NONE &&
+            (str = av_get_sample_fmt_name(enc->sample_fmt))) {
             snprintf(buf + strlen(buf), buf_size - strlen(buf),
-                     ", %s", av_get_sample_fmt_name(enc->sample_fmt));
+                     ", %s", str);
         }
         if (   enc->bits_per_raw_sample > 0
             && enc->bits_per_raw_sample != av_get_bytes_per_sample(enc->sample_fmt) * 8)

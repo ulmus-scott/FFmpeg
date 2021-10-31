@@ -3771,19 +3771,15 @@ FF_ENABLE_DEPRECATION_WARNINGS
     }
 
     for (i = 0; i < ic->nb_streams; i++) {
-        if (ic->streams[i]->info )
+        // MythTV change here
+        if (ic->streams[i]->internal->info )
         {
 #if FF_API_R_FRAME_RATE
         ic->streams[i]->internal->info->last_dts = AV_NOPTS_VALUE;
 #endif
-<<<<<<< HEAD
-        ic->streams[i]->info->fps_first_dts = AV_NOPTS_VALUE;
-        ic->streams[i]->info->fps_last_dts  = AV_NOPTS_VALUE;
-        }
-=======
         ic->streams[i]->internal->info->fps_first_dts = AV_NOPTS_VALUE;
         ic->streams[i]->internal->info->fps_last_dts  = AV_NOPTS_VALUE;
->>>>>>> c67d2a2875
+        }
     }
 
     read_size = 0;

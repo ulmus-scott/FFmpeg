@@ -1152,7 +1152,7 @@ static int dvbsub_parse_clut_segment(AVCodecContext *avctx,
                     return AVERROR_INVALIDDATA;
             }
             
-            # MythTV added
+            // MythTV added
             if (alpha == 255)
             {
                 r = g = b = 0;

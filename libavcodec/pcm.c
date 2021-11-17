@@ -255,7 +255,11 @@ static av_cold int pcm_decode_init(AVCodecContext *avctx)
     AVFloatDSPContext *fdsp;
     int i;
 
-    if (avctx->ch_layout.nb_channels <= 0) {
+// Breaks playback of some DVDs which feature an empty audio stream
+//
+//    if (avctx->ch_layout.nb_channels <= 0) {
+    if (avctx->ch_layout.nb_channels < 0) {
+
         av_log(avctx, AV_LOG_ERROR, "PCM channels out of bounds\n");
         return AVERROR(EINVAL);
     }

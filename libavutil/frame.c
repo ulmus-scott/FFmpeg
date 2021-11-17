@@ -335,6 +335,13 @@ static int frame_copy_props(AVFrame *dst, const AVFrame *src, int force_copy)
         av_dict_copy(&sd_dst->metadata, sd_src->metadata, 0);
     }
 
+    /* MythTV ATSC Subtitle Support -- Begin */
+    dst->atsc_cc_len   = src->atsc_cc_len;
+    dst->scte_cc_len   = src->scte_cc_len;
+    memcpy(dst->atsc_cc_buf, src->atsc_cc_buf, src->atsc_cc_len);
+    memcpy(dst->scte_cc_buf, src->scte_cc_buf, src->scte_cc_len);
+    /* MythTV ATSC Subtitle Support -- End */
+
     ret = av_buffer_replace(&dst->opaque_ref, src->opaque_ref);
     ret |= av_buffer_replace(&dst->private_ref, src->private_ref);
     return ret;

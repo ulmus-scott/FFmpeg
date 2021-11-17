@@ -44,7 +44,8 @@ endif
 	$(RANLIB) $@
 	-$(RM) $@.objs
 
-install-headers: install-lib$(NAME)-headers install-lib$(NAME)-pkgconfig
+#install-headers: install-lib$(NAME)-headers install-lib$(NAME)-pkgconfig
+install-headers: install-lib$(NAME)-headers
 
 install-libs-$(CONFIG_STATIC): install-lib$(NAME)-static
 install-libs-$(CONFIG_SHARED): install-lib$(NAME)-shared

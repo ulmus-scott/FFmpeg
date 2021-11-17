@@ -54,6 +54,15 @@ const char av_format_ffversion[] = "FFmpeg version " FFMPEG_VERSION;
 
 static AVMutex avformat_mutex = AV_MUTEX_INITIALIZER;
 
+/* MYTHTV CHANGES */
+extern AVInputFormat ff_mythtv_mpegts_demuxer;
+extern AVInputFormat ff_mythtv_mpegtsraw_demuxer;
+extern AVInputFormat ff_mpegts_demuxer;
+extern AVInputFormat ff_mpegtsraw_demuxer;
+
+/* END MYTHTV CHANGES */
+
+
 /**
  * @file
  * various utility functions for use within FFmpeg

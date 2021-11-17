@@ -4073,9 +4073,9 @@ logfile="ffbuild/config.log"
 # installation paths
 prefix_default="/usr/local"
 bindir_default='${prefix}/bin'
-datadir_default='${prefix}/share/ffmpeg'
+datadir_default='${prefix}/share/mythtv'
 docdir_default='${prefix}/share/doc/ffmpeg'
-incdir_default='${prefix}/include'
+incdir_default='${prefix}/include/mythtv'
 libdir_default='${prefix}/lib'
 mandir_default='${prefix}/share/man'
 
@@ -4149,11 +4149,11 @@ disable $EXTERNAL_LIBRARY_LIST $HWACCEL_LIBRARY_LIST
 
 # build settings
 SHFLAGS='-shared -Wl,-soname,$$(@F)'
-LIBPREF="lib"
+LIBPREF="libmyth"
 LIBSUF=".a"
 FULLNAME='$(NAME)$(BUILDSUF)'
 LIBNAME='$(LIBPREF)$(FULLNAME)$(LIBSUF)'
-SLIBPREF="lib"
+SLIBPREF="libmyth"
 SLIBSUF=".so"
 SLIBNAME='$(SLIBPREF)$(FULLNAME)$(SLIBSUF)'
 SLIBNAME_WITH_VERSION='$(SLIBNAME).$(LIBVERSION)'
@@ -4180,6 +4180,7 @@ OBJCC_O='-o $@'
 X86ASM_O='-o $@'
 LD_O='-o $@'
 LD_LIB='-l%'
+LD_MYTH_LIB='-lmyth%'
 LD_PATH='-L'
 HOSTCC_C='-c'
 HOSTCC_E='-E -o $@'
@@ -5827,7 +5828,7 @@ case $target_os in
         enabled x86_32 && check_ldflags -Wl,--large-address-aware
         add_cppflags -DWIN32_LEAN_AND_MEAN
         shlibdir_default="$bindir_default"
-        SLIBPREF=""
+        SLIBPREF="libmyth"
         SLIBSUF=".dll"
         SLIBNAME_WITH_VERSION='$(SLIBPREF)$(FULLNAME)-$(LIBVERSION)$(SLIBSUF)'
         SLIBNAME_WITH_MAJOR='$(SLIBPREF)$(FULLNAME)-$(LIBMAJOR)$(SLIBSUF)'
@@ -5878,7 +5879,7 @@ case $target_os in
         enabled x86_32 && check_ldflags -LARGEADDRESSAWARE
         add_cppflags -DWIN32_LEAN_AND_MEAN
         shlibdir_default="$bindir_default"
-        SLIBPREF=""
+        SLIBPREF="libmyth"
         SLIBSUF=".dll"
         SLIBNAME_WITH_VERSION='$(SLIBPREF)$(FULLNAME)-$(LIBVERSION)$(SLIBSUF)'
         SLIBNAME_WITH_MAJOR='$(SLIBPREF)$(FULLNAME)-$(LIBMAJOR)$(SLIBSUF)'
@@ -5930,7 +5931,7 @@ case $target_os in
         add_ldflags -Zomf -Zbin-files -Zargs-wild -Zhigh-mem -Zmap
         SHFLAGS='$(SUBDIR)$(NAME).def -Zdll -Zomf'
         LIBSUF="_s.a"
-        SLIBPREF=""
+        SLIBPREF="myth"
         SLIBSUF=".dll"
         SLIBNAME_WITH_VERSION='$(SLIBPREF)$(FULLNAME)-$(LIBVERSION)$(SLIBSUF)'
         SLIBNAME_WITH_MAJOR='$(SLIBPREF)$(shell echo $(FULLNAME) | cut -c1-6)$(LIBMAJOR)$(SLIBSUF)'
@@ -8101,6 +8102,7 @@ NVCC_O=$NVCC_O
 LD_O=$LD_O
 X86ASM_O=$X86ASM_O
 LD_LIB=$LD_LIB
+LD_MYTH_LIB=$LD_MYTH_LIB
 LD_PATH=$LD_PATH
 DLLTOOL=$dlltool
 WINDRES=$windres

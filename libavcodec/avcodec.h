@@ -4180,6 +4180,21 @@ int av_lockmgr_register(int (*cb)(void **mutex, enum AVLockOp op));
  */
 int avcodec_is_open(AVCodecContext *s);
 
+
+/* MythTV */
+#ifdef __cplusplus
+[[deprecated("use avcodec_get_name from <libavcodec/codec_id.h> instead")]]
+#endif
+const char *ff_codec_id_string(enum AVCodecID codec_id);
+#ifdef __cplusplus
+[[deprecated("use av_get_media_type_string from <libavutil/avutil.h> instead. NB returns NULL for unknown or invalid")]]
+#endif
+const char *ff_codec_type_string(enum AVMediaType codec_type);
+#ifdef __cplusplus
+[[deprecated("include <libavcodec/internal.h> instead")]]
+const uint8_t *avpriv_find_start_code(const uint8_t *p, const uint8_t *end, uint32_t *state);
+#endif // silence redundant declaration warnings when compiling ffmpeg
+
 /**
  * Allocate a CPB properties structure and initialize its fields to default
  * values.

@@ -117,7 +117,7 @@ int avpriv_mpegaudio_decode_header(MPADecodeHeader *s, uint32_t header)
     return 0;
 }
 
-int ff_mpa_decode_header(uint32_t head, int *sample_rate, int *channels, int *frame_size, int *bit_rate, enum AVCodecID *codec_id)
+int ff_mpa_decode_header(uint32_t head, int *sample_rate, int *channels, int *frame_size, int *bit_rate, enum AVCodecID *codec_id, int *dual_mono)
 {
     MPADecodeHeader s1, *s = &s1;
 
@@ -148,5 +148,7 @@ int ff_mpa_decode_header(uint32_t head, int *sample_rate, int *channels, int *fr
     *sample_rate = s->sample_rate;
     *channels = s->nb_channels;
     *bit_rate = s->bit_rate;
+    *dual_mono = (s->mode == MPA_DUAL);
+
     return s->frame_size;
 }

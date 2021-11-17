@@ -21,6 +21,7 @@ OBJS = allformats.o         \
        sdp.o                \
        url.o                \
        utils.o              \
+       utils-mythtv.o       \
 
 OBJS-$(HAVE_LIBC_MSVCRT)                 += file_open.o
 

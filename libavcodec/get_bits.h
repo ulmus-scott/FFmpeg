@@ -146,7 +146,11 @@ static inline unsigned int show_bits(GetBitContext *s, int n);
 #define BITS_AVAILABLE(name, gb) name ## _index < name ## _size_plus8
 #endif
 
-#define CLOSE_READER(name, gb) (gb)->index = name ## _index
+// Added the void use of the cache to defeat compiler warnings with newer gcc
+// (warning: variable 're_cache" set but not used)
+#   define CLOSE_READER(name, gb) \
+    (gb)->index = name##_index;   \
+    (void)name##_cache
 
 # ifdef LONG_BITSTREAM_READER
 
@@ -343,8 +347,8 @@ static inline int get_xbits(GetBitContext *s, int n)
 #if !CACHED_BITSTREAM_READER
 static inline int get_xbits_le(GetBitContext *s, int n)
 {
-    register int sign;
-    register int32_t cache;
+    int sign;
+    int32_t cache;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE_LE(re, s);

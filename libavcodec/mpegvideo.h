@@ -79,7 +79,7 @@
  * MpegEncContext.
  */
 typedef struct MpegEncContext {
-    AVClass *class;
+    AVClass *clss;
 
     int y_dc_scale, c_dc_scale;
     int ac_pred;

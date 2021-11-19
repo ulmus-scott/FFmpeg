@@ -353,8 +353,8 @@ static inline int get_xbits(GetBitContext *s, int n)
 #if !CACHED_BITSTREAM_READER
 static inline int get_xbits_le(GetBitContext *s, int n)
 {
-    int sign;
-    int32_t cache;
+    register int sign;
+    register int32_t cache;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE_LE(re, s);

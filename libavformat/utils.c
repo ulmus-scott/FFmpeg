@@ -590,7 +590,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
         }
     }
 
-    s->build_index = 1;
     s->duration = s->start_time = AV_NOPTS_VALUE;
 
     /* Allocate private data. */

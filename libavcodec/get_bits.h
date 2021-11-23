@@ -31,9 +31,7 @@
 
 /* MythTV: Prevent "ISO C++17 does not allow ‘register’ storage class
  * specifier" warning. */
-#ifdef __cplusplus
 #define register
-#endif
 
 #include "libavutil/common.h"
 #include "libavutil/intreadwrite.h"

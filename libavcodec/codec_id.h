@@ -554,6 +554,7 @@ enum AVCodecID {
     /* MythTV */
     /* teletext codecs */
     AV_CODEC_ID_MPEG2VBI,
+    AV_CODEC_ID_DVB_VBI,
 
     /* other specific kind of codecs (generally used for attachments) */
     AV_CODEC_ID_FIRST_UNKNOWN = 0x18000,           ///< A dummy ID pointing at the start of various fake codecs.

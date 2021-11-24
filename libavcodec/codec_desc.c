@@ -3709,6 +3709,12 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .long_name = NULL_IF_CONFIG_SMALL("LCEVC (Low Complexity Enhancement Video Coding) / MPEG-5 LCEVC / MPEG-5 part 2"),
     },
     {
+        .id        = AV_CODEC_ID_DVB_VBI,
+        .type      = AVMEDIA_TYPE_DATA,
+        .name      = "dvb_vbi",
+        .long_name = NULL_IF_CONFIG_SMALL("DVB VBI data"),
+    },
+    {
         .id        = AV_CODEC_ID_MPEG2TS,
         .type      = AVMEDIA_TYPE_DATA,
         .name      = "mpegts",

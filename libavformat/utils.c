@@ -1651,7 +1651,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
         if (!st->need_parsing || !st->parser) {
             /* no parsing needed: we just output the packet as is */
             compute_pkt_fields(s, st, NULL, pkt, AV_NOPTS_VALUE, AV_NOPTS_VALUE);
-            st->got_frame = 0;
             if ((s->iformat->flags & AVFMT_GENERIC_INDEX) &&
                 (pkt->flags & AV_PKT_FLAG_KEY) && pkt->dts != AV_NOPTS_VALUE) {
                 ff_reduce_index(s, st->index);
@@ -1924,7 +1923,6 @@ void ff_read_frame_flush(AVFormatContext *s)
             av_parser_close(st->parser);
             st->parser = NULL;
         }
-        st->got_frame = 0;
         st->last_IP_pts = AV_NOPTS_VALUE;
         st->internal->last_dts_for_order_check = AV_NOPTS_VALUE;
         if (st->first_dts == AV_NOPTS_VALUE)

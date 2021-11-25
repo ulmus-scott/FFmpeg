@@ -1098,8 +1098,6 @@ typedef struct AVStream {
 #endif
 
     /* mythtv addons */
-    int got_frame;
-
     int component_tag; ///< Component tag given in PMT, for MythTV MHEG
     int carousel_id;
     int data_id;

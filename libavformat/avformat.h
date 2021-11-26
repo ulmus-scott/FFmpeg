@@ -1332,6 +1332,18 @@ typedef struct AVFormatContext {
     unsigned int packet_size;
     int max_delay;
 
+    /* Myth addons */
+    /* mpeg-ts support */
+    void (*streams_changed)(void*);
+    void *stream_change_data;
+
+    /**
+     * A reference-counted buffer holding the last seen PMT in an MPEG-TS.
+     * Only set by mpegts-mythtv.
+     */
+    AVBufferRef *pmt_section;
+    /* End Myth addons */
+
     /**
      * Flags modifying the (de)muxer behaviour. A combination of AVFMT_FLAG_*.
      * Set by the user before avformat_open_input() / avformat_write_header().

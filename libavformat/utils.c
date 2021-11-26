@@ -2945,7 +2945,7 @@ static const char *duration_estimate_name(enum AVDurationEstimationMethod method
     return duration_name[method];
 }
 
-void estimate_timings(AVFormatContext *ic, int64_t old_offset)
+static void estimate_timings(AVFormatContext *ic, int64_t old_offset)
 {
     int64_t file_size;
 
@@ -2996,6 +2996,11 @@ void estimate_timings(AVFormatContext *ic, int64_t old_offset)
                duration_estimate_name(ic->duration_estimation_method),
                (int64_t)ic->bit_rate / 1000);
     }
+}
+
+void av_estimate_timings(AVFormatContext *ic, int64_t old_offset)
+{
+    estimate_timings(ic, old_offset);
 }
 
 static int has_codec_parameters(AVStream *st, const char **errmsg_ptr)

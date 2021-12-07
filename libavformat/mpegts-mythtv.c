@@ -686,7 +686,7 @@ static void mpegts_push_section(MpegTSFilter *filter, const uint8_t *section, in
     if (sect->new_packet && pkt && sect->st && pkt->size == 0) {
         int pktLen = section_len + 184; /* Add enough for a complete TS payload. */
         sect->new_packet = 0;
-        av_packet_unref(pkt);
+        av_free_packet(pkt);
         if (av_new_packet(pkt, pktLen) == 0) {
             memcpy(pkt->data, section, section_len);
             memset(pkt->data+section_len, 0xff, pktLen-section_len);
@@ -2916,7 +2916,7 @@ static int mpegts_raw_read_packet(AVFormatContext *s,
     pkt->pos= avio_tell(s->pb);
     ret = read_packet(s, pkt->data, ts->raw_packet_size);
     if (ret < 0) {
-        av_packet_unref(pkt);
+        av_free_packet(pkt);
         return ret;
     }
     if (ts->mpeg2ts_compute_pcr) {
@@ -2955,7 +2955,7 @@ static int mpegts_read_packet(AVFormatContext *s,
     ts->pkt = pkt;
     ret = handle_packets(ts, 0);
     if (ret < 0) {
-        av_packet_unref(ts->pkt);
+        av_free_packet(ts->pkt);
         /* flush pes data left */
         for (i = 0; i < NB_PID_MAX; i++) {
             if (ts->pids[i] && ts->pids[i]->type == MPEGTS_PES) {
@@ -3032,7 +3032,7 @@ static int64_t mpegts_get_dts(AVFormatContext *s, int stream_index,
         ret= av_read_frame(s, &pkt);
         if(ret < 0)
             return AV_NOPTS_VALUE;
-        av_packet_unref(&pkt);
+        av_free_packet(&pkt);
         if(pkt.dts != AV_NOPTS_VALUE && pkt.pos >= 0){
             ff_reduce_index(s, pkt.stream_index);
             av_add_index_entry(s->streams[pkt.stream_index], pkt.pos, pkt.dts, 0, 0, AVINDEX_KEYFRAME /* FIXME keyframe? */);

@@ -5932,7 +5932,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
  * @param id stream id of stream to remove
  * @param remove_ts if true, remove any matching MPEG-TS filter as well
  */
-void av_remove_stream(AVFormatContext *s, int id, int /* remove_ts */) {
+void av_remove_stream(AVFormatContext *s, int id, int remove_ts) {
     int i;
     int changes = 0;
 
@@ -5987,6 +5987,8 @@ void av_remove_stream(AVFormatContext *s, int id, int /* remove_ts */) {
         for (i=0; i<s->nb_streams; i++)
             s->streams[i]->index=i;
     }
+
+    (void)remove_ts;
 }
 
 // temporary export for mpegts-mythtv.c; FFmpeg 5.0 exports it as ff_flush_packet_queue

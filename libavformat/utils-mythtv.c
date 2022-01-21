@@ -21,7 +21,6 @@
 
 #include "avformat.h"
 #include "internal.h"
-#include "mpegts-mythtv.h"
 
 /**
  * @brief Remove a stream from a media stream.
@@ -32,7 +31,7 @@
  * @param id stream id of stream to remove
  * @param remove_ts if true, remove any matching MPEG-TS filter as well
  */
-void av_remove_stream(AVFormatContext *s, int id, int remove_ts) {
+void av_remove_stream(AVFormatContext *s, int id, int /* remove_ts */) {
     int i;
     int changes = 0;
 
@@ -75,16 +74,6 @@ void av_remove_stream(AVFormatContext *s, int id, int remove_ts) {
         else
             s->streams[i] = NULL;
 
-        /* remove ts filter if remove ts is true and
-         * the format decoder is the "mpegts" decoder
-         */
-        if (remove_ts && s->iformat && s->priv_data &&
-            (0 == strncmp(s->iformat->name, "mpegts", 6))) {
-            av_log(NULL, AV_LOG_DEBUG,
-                   "av_remove_stream: mpegts_remove_stream\n");
-            MpegTSContext *context = (MpegTSContext*) s->priv_data;
-            mpegts_remove_stream(context, id);
-        }
         changes = 1;
     }
     if (changes)

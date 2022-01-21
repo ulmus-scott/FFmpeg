@@ -1851,7 +1851,7 @@ return_packet:
 }
 
 /* XXX: suppress the packet queue */
-void flush_packet_queue(AVFormatContext *s)
+static void flush_packet_queue(AVFormatContext *s)
 {
     if (!s->internal)
         return;
@@ -5987,4 +5987,10 @@ void av_remove_stream(AVFormatContext *s, int id, int /* remove_ts */) {
         for (i=0; i<s->nb_streams; i++)
             s->streams[i]->index=i;
     }
+}
+
+// temporary export for mpegts-mythtv.c; FFmpeg 5.0 exports it as ff_flush_packet_queue
+void mythtv_flush_packet_queue(AVFormatContext *s)
+{
+    flush_packet_queue(s);
 }

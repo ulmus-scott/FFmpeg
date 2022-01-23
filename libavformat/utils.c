@@ -3622,6 +3622,7 @@ static int extract_extradata(AVStream *st, const AVPacket *pkt)
 
 /** Number of frames to read, max. (MythTV) */
 #define MAX_FRAMES           45
+
 static int add_coded_side_data(AVStream *st, AVCodecContext *avctx)
 {
     int i;

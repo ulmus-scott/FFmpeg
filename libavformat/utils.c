@@ -3631,7 +3631,6 @@ static int extract_extradata(AVStream *st, const AVPacket *pkt)
 
 /** Number of frames to read, max. (MythTV) */
 #define MAX_FRAMES           45
-
 static int add_coded_side_data(AVStream *st, AVCodecContext *avctx)
 {
     int i;
@@ -3844,7 +3843,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
             if (i == ic->nb_streams) {
                 analyzed_all_streams = 1;
                 /* NOTE: If the format has no header, then we need to read some
-                * packets to get most of the streams, so we cannot stop here. */
+                 * packets to get most of the streams, so we cannot stop here. */
                 /* There are MythTV changes here */
                 if (!(ic->ctx_flags & AVFMTCTX_NOHEADER) ||
                     (read_size >= MAX_READ_SIZE || read_packets >= MAX_FRAMES) ||

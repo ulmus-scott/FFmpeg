@@ -2997,11 +2997,6 @@ static void estimate_timings(AVFormatContext *ic, int64_t old_offset)
     }
 }
 
-void av_estimate_timings(AVFormatContext *ic, int64_t old_offset)
-{
-    estimate_timings(ic, old_offset);
-}
-
 static int has_codec_parameters(AVStream *st, const char **errmsg_ptr)
 {
     AVCodecContext *avctx = st->internal->avctx;

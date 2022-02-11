@@ -158,7 +158,6 @@ struct Stream {
 #define MAX_PIDS_PER_PROGRAM (MAX_STREAMS_PER_PROGRAM + 2)
 struct Program {
     unsigned int id; // program id/service id
-    unsigned int pid; // PMT PID (not in upstream), only used in add_pat_entry() and is_pat_same()
     unsigned int nb_pids;
     unsigned int pids[MAX_PIDS_PER_PROGRAM];
     unsigned int nb_streams;
@@ -2838,22 +2837,6 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
     }
 }
 
-static int is_pat_same(MpegTSContext *mpegts_ctx,
-                       int *pmt_pnums, int *pmt_pids, unsigned int pmt_count)
-{
-    int idx;
-    if (mpegts_ctx->nb_prg != pmt_count)
-        return 0;
-
-    for (idx = 0; idx < pmt_count; idx++)
-    {
-        if ((mpegts_ctx->prg[idx].id  != pmt_pnums[idx]) ||
-            (mpegts_ctx->prg[idx].pid != pmt_pids[idx]))
-            return 0;
-    }
-    return 1;
-}
-
 /* mpegts_push_section: return one or more tables.  The tables may not completely fill
    the packet and there may be stuffing bytes at the end.
    This is complicated because a single TS packet may result in several tables being
@@ -2903,21 +2886,6 @@ static void mpegts_push_section(MpegTSFilter *filter, const uint8_t *section, in
    }
 }
 
-// from FFmpeg sync
-static void add_pat_entry(MpegTSContext *ts, unsigned int programid, unsigned int pid)
-{
-    struct Program *p;
-    void *tmp = av_realloc(ts->prg, (ts->nb_prg+1)*sizeof(struct Program));
-    if(!tmp)
-        return;
-    ts->prg = tmp;
-    p = &ts->prg[ts->nb_prg];
-    p->id = programid;
-    p->pid = pid; // MythTV added
-    p->nb_pids = 0;
-    ts->nb_prg++;
-}
-
 static void pat_cb(MpegTSFilter *filter, const uint8_t *section, int section_len)
 {
     MpegTSContext *ts = filter->u.section_filter.opaque;
@@ -2927,14 +2895,6 @@ static void pat_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
     int sid, pmt_pid;
     int nb_prg = 0;
     AVProgram *program;
-
-    // MythTV added
-    int pmt_pnums[PAT_MAX_PMT];
-    int pmt_pids[PAT_MAX_PMT];
-    unsigned int pmt_count = 0;
-    int i;
-    int found = 0;
-    // end MythTV added
 
     av_log(ts->stream, AV_LOG_TRACE, "PAT:\n");
     hex_dump_debug(ts->stream, section, section_len);
@@ -2952,8 +2912,7 @@ static void pat_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
         return;
     ts->stream->ts_id = h->id;
 
-    for (i = 0; i < PAT_MAX_PMT; ++i)
-    {
+    for (;;) {
         sid = get16(&p, p_end);
         if (sid < 0)
             break;
@@ -2966,71 +2925,63 @@ static void pat_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
             break;
 
         av_log(ts->stream, AV_LOG_TRACE, "sid=0x%x pid=0x%x\n", sid, pmt_pid);
-        av_log(ts->stream, AV_LOG_TRACE, "req_sid=0x%x\n", ts->req_sid);
 
-        pmt_pnums[i] = sid;
-        pmt_pids[i] = pmt_pid;
+        if (sid == 0x0000) {
+            /* NIT info */
+        } else {
+            MpegTSFilter *fil = ts->pids[pmt_pid];
+            struct Program *prg;
+            program = av_new_program(ts->stream, sid);
+            if (program) {
+                program->program_num = sid;
+                program->pmt_pid = pmt_pid;
+            }
+            if (fil)
+                if (   fil->type != MPEGTS_SECTION
+                    || fil->pid != pmt_pid
+                    || fil->u.section_filter.section_cb != pmt_cb)
+                    mpegts_close_filter(ts, ts->pids[pmt_pid]);
 
-        if (pmt_pids[i] == 0x0)
-        {
-            av_log(NULL, AV_LOG_ERROR, "Invalid PAT ignored "
-                   "MPEG Program Number=0x%x pid=0x%x req_sid=0x%x\n",
-                   pmt_pnums[i], pmt_pids[i], ts->req_sid);
-            return;
+            if (!ts->pids[pmt_pid])
+                mpegts_open_section_filter(ts, pmt_pid, pmt_cb, ts, 1);
+            prg = add_program(ts, sid);
+            if (prg) {
+                unsigned prg_idx = prg - ts->prg;
+                if (prg->nb_pids && prg->pids[0] != pmt_pid)
+                    clear_program(prg);
+                add_pid_to_program(prg, pmt_pid);
+                if (prg_idx > nb_prg)
+                    FFSWAP(struct Program, ts->prg[nb_prg], ts->prg[prg_idx]);
+                if (prg_idx >= nb_prg)
+                    nb_prg++;
+            }
         }
+    }
+    ts->nb_prg = nb_prg;
 
-        pmt_count++;
-
+    if (sid < 0) {
+        int i,j;
+        for (j=0; j<ts->stream->nb_programs; j++) {
+            for (i = 0; i < ts->nb_prg; i++)
+                if (ts->prg[i].id == ts->stream->programs[j]->id)
+                    break;
+            if (i==ts->nb_prg && !ts->skip_clear)
+                clear_avprogram(ts, ts->stream->programs[j]->id);
+        }
     }
 
-    if (!is_pat_same(ts, pmt_pnums, pmt_pids, pmt_count))
-    {
-#ifdef DEBUG
-        av_log(NULL, AV_LOG_DEBUG, "New PAT!\n");
-#endif
-        /* if there were services, get rid of them */
-        ts->nb_prg = 0;
-
-        /* if there are new services, add them */
-        for (i = 0; i < pmt_count; ++i)
-        {
-            add_pat_entry(ts, pmt_pnums[i], pmt_pids[i]);
-        }
-    }
-
-    found = 0;
-    for (i = 0; i < pmt_count; ++i)
+    { // MythTV added --------------------------------
+    int found = 0;
+    av_log(ts->stream, AV_LOG_TRACE, "req_sid=0x%x\n", ts->req_sid);
+    for (int i = 0; i < ts->nb_prg; ++i)
     {
         /* if an MPEG program number is requested, and this is that program,
          * add a filter for the PMT. */
-        if (ts->req_sid == pmt_pnums[i])
+        if (ts->req_sid == ts->prg[i].id)
         {
 #ifdef DEBUG
             av_log(NULL, AV_LOG_DEBUG, "Found program number!\n");
 #endif
-            /* close old filter if it doesn't match */
-            if (ts->pmt_filter)
-            {
-                MpegTSFilter *f = ts->pmt_filter;
-                MpegTSSectionFilter *sec = &f->u.section_filter;
-
-                if ((f->pid != pmt_pids[i])     ||
-                    (f->type != MPEGTS_SECTION) ||
-                    (sec->section_cb != pmt_cb) ||
-                    (sec->opaque != ts))
-                {
-                    mpegts_close_filter(ts, ts->pmt_filter);
-                    ts->pmt_filter = NULL;
-                }
-            }
-
-            /* create new pmt_filter if we need one */
-            if (!ts->pmt_filter)
-            {
-                ts->pmt_filter = mpegts_open_section_filter(
-                    ts, pmt_pids[i], pmt_cb, ts, 1);
-            }
-
             found = 1;
         }
     }
@@ -3057,6 +3008,7 @@ static void pat_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
         ts->pmt_scan_state = PMT_NOT_IN_PAT;
         ts->stop_parse = 1;
     }
+    } // end MythTV added --------------------------
 }
 
 static void eit_cb(MpegTSFilter *filter, const uint8_t *section, int section_len)

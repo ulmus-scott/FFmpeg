@@ -3273,38 +3273,37 @@ static void pat_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
     }
 
     { // MythTV added --------------------------------
-    int found = 0;
-    av_log(ts->stream, AV_LOG_TRACE, "req_sid=0x%x\n", ts->req_sid);
-    for (int i = 0; i < ts->nb_prg; ++i)
-    {
-        /* if an MPEG program number is requested, and this is that program,
-         * add a filter for the PMT. */
-        if (ts->req_sid == ts->prg[i].id)
+        int found = 0;
+        av_log(ts->stream, AV_LOG_TRACE, "req_sid=0x%x\n", ts->req_sid);
+        for (int i = 0; i < ts->nb_prg; ++i)
         {
-            av_log(ts->stream, AV_LOG_TRACE, "Found program number!\n");
-
-            found = 1;
+            /* if an MPEG program number is requested, and this is that program,
+             * add a filter for the PMT. */
+            if (ts->req_sid == ts->prg[i].id)
+            {
+                av_log(ts->stream, AV_LOG_TRACE, "Found program number!\n");
+                found = 1;
+            }
         }
-    }
 
-    /* if we are scanning for any PAT and not a particular PMT,
-     * tell parser it is safe to quit. */
-    if (ts->req_sid < 0 && ts->scanning)
-    {
-        av_log(ts->stream, AV_LOG_TRACE, "Found PAT, ending scan\n");
-        ts->stop_parse = 1;
-    }
+        /* if we are scanning for any PAT and not a particular PMT,
+         * tell parser it is safe to quit. */
+        if (ts->req_sid < 0 && ts->scanning)
+        {
+            av_log(ts->stream, AV_LOG_TRACE, "Found PAT, ending scan\n");
+            ts->stop_parse = 1;
+        }
 
-    /* if we are looking for a particular MPEG program number,
-     * and it is not in this PAT indicate this in "pmt_scan_state"
-     * and tell parser it is safe to quit. */
-    if (ts->req_sid >= 0 && !found)
-    {
-        av_log(ts->stream, AV_LOG_TRACE, "Program 0x%x is not in PAT, ending scan\n",
-               ts->req_sid);
-        ts->pmt_scan_state = PMT_NOT_IN_PAT;
-        ts->stop_parse = 1;
-    }
+        /* if we are looking for a particular MPEG program number,
+         * and it is not in this PAT indicate this in "pmt_scan_state"
+         * and tell parser it is safe to quit. */
+        if (ts->req_sid >= 0 && !found)
+        {
+            av_log(ts->stream, AV_LOG_TRACE, "Program 0x%x is not in PAT, ending scan\n",
+                   ts->req_sid);
+            ts->pmt_scan_state = PMT_NOT_IN_PAT;
+            ts->stop_parse = 1;
+        }
     } // end MythTV added --------------------------
 }
 

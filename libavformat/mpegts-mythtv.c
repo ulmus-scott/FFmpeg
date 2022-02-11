@@ -2979,9 +2979,7 @@ static void pat_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
          * add a filter for the PMT. */
         if (ts->req_sid == ts->prg[i].id)
         {
-#ifdef DEBUG
-            av_log(NULL, AV_LOG_DEBUG, "Found program number!\n");
-#endif
+            av_log(ts->stream, AV_LOG_TRACE, "Found program number!\n");
             found = 1;
         }
     }
@@ -2990,9 +2988,7 @@ static void pat_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
      * tell parser it is safe to quit. */
     if (ts->req_sid < 0 && ts->scanning)
     {
-#ifdef DEBUG
-        av_log(NULL, AV_LOG_DEBUG, "Found PAT, ending scan\n");
-#endif
+        av_log(ts->stream, AV_LOG_TRACE, "Found PAT, ending scan\n");
         ts->stop_parse = 1;
     }
 
@@ -3001,10 +2997,8 @@ static void pat_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
      * and tell parser it is safe to quit. */
     if (ts->req_sid >= 0 && !found)
     {
-#ifdef DEBUG
-        av_log(NULL, AV_LOG_DEBUG, "Program 0x%x is not in PAT, ending scan\n",
+        av_log(ts->stream, AV_LOG_TRACE, "Program 0x%x is not in PAT, ending scan\n",
                ts->req_sid);
-#endif
         ts->pmt_scan_state = PMT_NOT_IN_PAT;
         ts->stop_parse = 1;
     }

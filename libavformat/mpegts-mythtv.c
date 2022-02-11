@@ -231,8 +231,6 @@ struct MpegTSContext {
     AVBufferPool* pools[32];
 
     // MythTV only
-    /** filter for the PMT for the MPEG program number specified by req_sid */
-    MpegTSFilter *pmt_filter;
     /** MPEG program number of stream we want to decode      */
     int req_sid;
 
@@ -3566,14 +3564,14 @@ static int mpegts_read_header(AVFormatContext *s)
 
             /* fallback code to deal with broken streams from
              * DBOX2/Firewire cable boxes. */
-            if (ts->pmt_filter &&
+            if (ts->pids[ts->req_sid] &&
                 (ts->pmt_scan_state == PMT_NOT_YET_FOUND))
             {
                 av_log(NULL, AV_LOG_ERROR,
                        "Tuning to pnum: 0x%x without CRC check on PMT\n",
                        ts->prg[i].id);
                 /* turn off crc checking */
-                ts->pmt_filter->u.section_filter.check_crc = 0;
+                ts->pids[ts->req_sid]->u.section_filter.check_crc = 0;
                 /* try again */
                 avio_seek(pb, pos, SEEK_SET);
                 ts->req_sid = ts->prg[i].id;
@@ -3582,13 +3580,13 @@ static int mpegts_read_header(AVFormatContext *s)
 
             /* fallback code to deal with streams that are not complete PMT
              * streams (BBC iPlayer IPTV as an example) */
-            if (ts->pmt_filter &&
+            if (ts->pids[ts->req_sid] &&
                 (ts->pmt_scan_state == PMT_NOT_YET_FOUND))
             {
                 av_log(NULL, AV_LOG_ERROR,
                        "Overriding PMT data length, using "
                        "contents of first TS packet only!\n");
-                ts->pmt_filter->pmt_chop_at_ts = 1;
+                ts->pids[ts->req_sid]->pmt_chop_at_ts = 1;
                 /* try again */
                 avio_seek(pb, pos, SEEK_SET);
                 ts->req_sid = ts->prg[i].id;

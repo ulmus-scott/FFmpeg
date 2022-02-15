@@ -1895,27 +1895,14 @@ static const uint8_t opus_channel_map[8][8] = {
     { 0,6,1,2,3,4,5,7 },
 };
 
-static void mpegts_find_stream_type_pmt(pmt_entry_t *st,
-                                    uint32_t stream_type, const StreamType *types)
-{
-    for (; types->stream_type; types++) {
-        if (stream_type == types->stream_type) {
-            st->codec_type = types->codec_type;
-            st->codec_id   = types->codec_id;
-            return;
-        }
-    }
-}
-
-int ff_parse_mpeg2_descriptor(AVFormatContext *fc, pmt_entry_t *item, int stream_type,
+int ff_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type,
                               const uint8_t **pp, const uint8_t *desc_list_end,
                               Mp4Descr *mp4_descr, int mp4_descr_count, int pid,
-                              MpegTSContext *ts, dvb_caption_info_t *dvbci)
+                              MpegTSContext *ts)
 {
     const uint8_t *desc_end;
     int desc_len, desc_tag, desc_es_id, ext_desc_tag, channels, channel_config_code;
-    //char language[252]; upstream
-    char *language = dvbci->language;
+    char language[252];
     int i;
 
     desc_tag = get8(pp, desc_list_end);
@@ -1930,22 +1917,16 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, pmt_entry_t *item, int stream
 
     av_log(fc, AV_LOG_TRACE, "tag: 0x%02x len=%d\n", desc_tag, desc_len);
 
-    if (item->codec_id == AV_CODEC_ID_NONE &&
+    if ((st->codecpar->codec_id == AV_CODEC_ID_NONE || st->internal->request_probe > 0) &&
         stream_type == STREAM_TYPE_PRIVATE_DATA)
-    {
-        mpegts_find_stream_type_pmt(item, desc_tag, DESC_types);
-
-        if (item->codec_id != AV_CODEC_ID_NONE)
-            stream_type = 0;
-    }
+        mpegts_find_stream_type(st, desc_tag, DESC_types);
 
     switch (desc_tag) {
     case VIDEO_STREAM_DESCRIPTOR:
         if (get8(pp, desc_end) & 0x1) {
-            dvbci->disposition |= AV_DISPOSITION_STILL_IMAGE;
+            st->disposition |= AV_DISPOSITION_STILL_IMAGE;
         }
         break;
-#if 0
     case SL_DESCRIPTOR:
         desc_es_id = get16(pp, desc_end);
         if (desc_es_id < 0)
@@ -1990,9 +1971,7 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, pmt_entry_t *item, int stream
             }
         }
         break;
-#endif
     case 0x56: /* DVB teletext descriptor */
-#if 0
         {
             uint8_t *extradata = NULL;
             int language_count = desc_len / 5, ret;
@@ -2032,15 +2011,8 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, pmt_entry_t *item, int stream
                 st->internal->need_context_update = 1;
             }
         }
-#else
-        language[0] = get8(pp, desc_end);
-        language[1] = get8(pp, desc_end);
-        language[2] = get8(pp, desc_end);
-        language[3] = 0;
-#endif
         break;
     case 0x59: /* subtitling descriptor */
-#if 0
         {
             /* 8 bytes per DVB subtitle substream data:
              * ISO_639_language_code (3 bytes),
@@ -2103,22 +2075,8 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, pmt_entry_t *item, int stream
                 st->internal->need_context_update = 1;
             }
         }
-#else
-        language[0] = get8(pp, desc_end);
-        language[1] = get8(pp, desc_end);
-        language[2] = get8(pp, desc_end);
-        language[3] = 0;
-        get8(pp, desc_end);
-
-        dvbci->comp_page   = get16(pp, desc_end);
-        dvbci->anc_page    = get16(pp, desc_end);
-        dvbci->sub_id = (dvbci->anc_page << 16) | dvbci->comp_page;
-
-        *pp += 4;
-#endif
         break;
     case ISO_639_LANGUAGE_DESCRIPTOR:
-#if 0
         for (i = 0; i + 4 <= desc_len; i += 4) {
             language[i + 0] = get8(pp, desc_end);
             language[i + 1] = get8(pp, desc_end);
@@ -2143,16 +2101,8 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, pmt_entry_t *item, int stream
              * another, more specific descriptor (e.g. supplementary audio) */
             av_dict_set(&st->metadata, "language", language, AV_DICT_DONT_OVERWRITE);
         }
-#else
-        language[0] = get8(pp, desc_end);
-        language[1] = get8(pp, desc_end);
-        language[2] = get8(pp, desc_end);
-        language[3] = '0';
-        get8(pp, desc_end);
-#endif
         break;
     case REGISTRATION_DESCRIPTOR:
-#if 0
         st->codecpar->codec_tag = bytestream_get_le32(pp);
         av_log(fc, AV_LOG_TRACE, "reg_desc=%.4s\n", (char *)&st->codecpar->codec_tag);
         if (st->codecpar->codec_id == AV_CODEC_ID_NONE || st->internal->request_probe > 0) {
@@ -2161,16 +2111,8 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, pmt_entry_t *item, int stream
                 st->internal->request_probe = 50;
         }
         break;
-#else
-        dvbci->codec_tag = bytestream_get_le32(pp);
-        av_dlog(fc, "reg_desc=%.4s\n", (char*)&dvbci->codec_tag);
-        if (item->codec_id == AV_CODEC_ID_NONE &&
-            stream_type == STREAM_TYPE_PRIVATE_DATA)
-            mpegts_find_stream_type_pmt(item, dvbci->codec_tag, REGD_types);
-        break;
-#endif
     case DVB_BROADCAST_ID:
-        dvbci->data_id = get16(pp, desc_end);
+        st->data_id = get16(pp, desc_end);
         break;
     case DVB_CAROUSEL_ID:
         {
@@ -2179,36 +2121,30 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, pmt_entry_t *item, int stream
             carId = (carId << 8) | get8(pp, desc_end);
             carId = (carId << 8) | get8(pp, desc_end);
             carId = (carId << 8) | get8(pp, desc_end);
-            dvbci->carousel_id = carId;
+            st->carousel_id = carId;
         }
         break;
-#ifdef UPSTREAM_TO_MYTHTV
     case 0x52: /* stream identifier descriptor */
         st->stream_identifier = 1 + get8(pp, desc_end);
-#else
-    case DVB_DATA_STREAM:
-        dvbci->component_tag = get8(pp, desc_end);
-        /* Audio and video are sometimes encoded in private streams labelled with
-         * a component tag. */
-#if 0
-         if (item->codec_id == AV_CODEC_ID_NONE &&
-             desc_count  == 1 &&
-             stream_type == STREAM_TYPE_PRIVATE_DATA)
-             mpegts_find_stream_type_pmt(item, dvbci->component_tag,
-                                         COMPONENT_TAG_types);
-#endif
-#endif
+        // DVB_DATA_STREAM
+        st->component_tag = st->stream_identifier - 1;
         break;
     case DVB_VBI_TELETEXT_ID:
         language[0] = get8(pp, desc_end);
         language[1] = get8(pp, desc_end);
         language[2] = get8(pp, desc_end);
-        dvbci->txt_type = (get8(pp, desc_end)) >> 3;
+        if (language[0]) {
+            language[3] = 0;
+            /* don't overwrite language, as it may already have been set by
+             * another, more specific descriptor (e.g. supplementary audio) */
+            av_dict_set(&st->metadata, "language", language, AV_DICT_DONT_OVERWRITE);
+        }
+        // txt_type = (get8(pp, desc_end)) >> 3;
         break;
     case DVB_VBI_DATA_ID:
-        dvbci->vbi_data = 1; //not parsing the data service descriptors
+        // not parsing the data service descriptors
+        // vbi_data = 1;
         break;
-#if 0
     case METADATA_DESCRIPTOR:
         if (get16(pp, desc_end) == 0xFFFF)
             *pp += 4;
@@ -2407,7 +2343,6 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, pmt_entry_t *item, int stream
                    dovi->dv_bl_signal_compatibility_id);
         }
         break;
-#endif
     default:
         break;
     }
@@ -2913,6 +2848,16 @@ static void export_pmt(AVFormatContext *ctx, const uint8_t *section, int section
     ctx->cur_pmt_sect_len = section_len;
     av_freep(&tmp); // NOP if ctx->cur_pmt_sect was NULL
 }
+
+static int compare_pmt_equal(AVFormatContext *ctx, const uint8_t *section, int section_len)
+{
+    if (!ctx->cur_pmt_sect)
+        return 0;
+    if (ctx->cur_pmt_sect_len != section_len)
+        return 0;
+    return memcmp(ctx->cur_pmt_sect, section, section_len) == 0;
+}
+
 // End MythTV only ------------------------------------------------------
 
 static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len)
@@ -2933,20 +2878,6 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
     int mp4_descr_count = 0;
     Mp4Descr mp4_descr[MAX_MP4_DESCR_COUNT] = { { 0 } };
     int i;
-
-    // MythTV
-    int equal_streams = 0;
-    int last_item = 0;
-
-    pmt_entry_t items[PMT_PIDS_MAX];
-    memset(&items, 0, sizeof(pmt_entry_t) * PMT_PIDS_MAX);
-
-    // initialize to codec_type_unknown
-    for (int i=0; i < PMT_PIDS_MAX; i++)
-        items[i].codec_type = AVMEDIA_TYPE_UNKNOWN;
-
-    mpegts_cleanup_streams(ts); /* in case someone else removed streams.. */
-    // end MythTV
 
     av_log(ts->stream, AV_LOG_TRACE, "PMT: len %i\n", section_len);
     hex_dump_debug(ts->stream, section, section_len);
@@ -3038,79 +2969,149 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
     if (prg)
         prg->pmt_found = 1;
 
-    for(;;) {
-        dvb_caption_info_t dvbci;
+    for (i = 0; i < MAX_STREAMS_PER_PROGRAM; i++) {
+        st = 0;
+        pes = NULL;
         stream_type = get8(&p, p_end);
         if (stream_type < 0)
             break;
         pid = get16(&p, p_end);
         if (pid < 0)
-            break;
+            goto out;
         pid &= 0x1fff;
+        if (pid == ts->current_pid)
+            goto out;
 
-        /* break if we are out of space. */
-        if (last_item >= PMT_PIDS_MAX) {
-            av_log(NULL, AV_LOG_DEBUG,
-                   "Could not add new pid 0x%x, i = %i, "
-                   "would cause overrun\n", pid, last_item);
-            assert(0);
-            break;
+        stream_identifier = parse_stream_identifier_desc(p, p_end) + 1;
+
+        // MythTV added
+        if (stream_type == STREAM_TYPE_DSMCC_B)
+        {
+            SectionContext *sect = NULL;
+            sect = add_section_stream(ts, pid, stream_type);
+            if (!sect)
+            {
+                av_log(ts->stream, AV_LOG_ERROR, "mpegts_add_stream: "
+                       "error creating Section context for pid 0x%x with type %i\n",
+                       pid, stream_type);
+                goto out;
+            }
+
+            st = new_section_av_stream(sect, AVMEDIA_TYPE_DATA, AV_CODEC_ID_DSMCC_B);
+            if (!st)
+            {
+                av_log(ts->stream, AV_LOG_ERROR, "mpegts_add_stream: "
+                       "error creating A/V stream for pid 0x%x with type %i\n",
+                       pid, stream_type);
+                goto out;
+            }
+
+            av_log(ts->stream, AV_LOG_DEBUG, "mpegts_add_stream: "
+                   "stream #%d, has id 0x%x and codec %s, type %s at 0x%p\n",
+                   st->index, st->id, avcodec_get_name(st->codecpar->codec_id),
+                   av_get_media_type_string(st->codecpar->codec_type), st);
+        } else // upstream
+        /* now create stream */
+        if (ts->pids[pid] && ts->pids[pid]->type == MPEGTS_PES) {
+            pes = ts->pids[pid]->u.pes_filter.opaque;
+            if (ts->merge_pmt_versions && !pes->st) {
+                st = find_matching_stream(ts, pid, h->id, stream_identifier, i, &old_program);
+                if (st) {
+                    pes->st = st;
+                    pes->stream_type = stream_type;
+                    pes->merged_st = 1;
+                }
+            }
+            if (!pes->st) {
+                pes->st = avformat_new_stream(pes->stream, NULL);
+                if (!pes->st)
+                    goto out;
+                pes->st->id = pes->pid;
+            }
+            st = pes->st;
+        } else if (is_pes_stream(stream_type, prog_reg_desc)) {
+            if (ts->pids[pid])
+                mpegts_close_filter(ts, ts->pids[pid]); // wrongly added sdt filter probably
+            pes = add_pes_stream(ts, pid, pcr_pid);
+            if (ts->merge_pmt_versions && pes && !pes->st) {
+                st = find_matching_stream(ts, pid, h->id, stream_identifier, i, &old_program);
+                if (st) {
+                    pes->st = st;
+                    pes->stream_type = stream_type;
+                    pes->merged_st = 1;
+                }
+            }
+            if (pes && !pes->st) {
+                st = avformat_new_stream(pes->stream, NULL);
+                if (!st)
+                    goto out;
+                st->id = pes->pid;
+            }
+        } else {
+            int idx = ff_find_stream_index(ts->stream, pid);
+            if (idx >= 0) {
+                st = ts->stream->streams[idx];
+            }
+            if (ts->merge_pmt_versions && !st) {
+                st = find_matching_stream(ts, pid, h->id, stream_identifier, i, &old_program);
+            }
+            if (!st) {
+                st = avformat_new_stream(ts->stream, NULL);
+                if (!st)
+                    goto out;
+                st->id = pid;
+                st->codecpar->codec_type = AVMEDIA_TYPE_DATA;
+                if (stream_type == 0x86 && prog_reg_desc == AV_RL32("CUEI")) {
+                    mpegts_find_stream_type(st, stream_type, SCTE_types);
+                    mpegts_open_section_filter(ts, pid, scte_data_cb, ts, 1);
+                }
+            }
         }
 
-        items[last_item].pid  = pid;
+        if (!st)
+            goto out;
 
-        mpegts_find_stream_type_pmt(&items[last_item], stream_type, ISO_types);
-        if (items[last_item].codec_id == AV_CODEC_ID_NONE) {
-            if (prog_reg_desc == AV_RL32("HDMV"))
-                mpegts_find_stream_type_pmt(&items[last_item], stream_type, HDMV_types);
-            else
-                mpegts_find_stream_type_pmt(&items[last_item], stream_type, MISC_types);
+        if (pes && !pes->stream_type)
+            mpegts_set_stream_info(st, pes, stream_type, prog_reg_desc);
+
+        add_pid_to_program(prg, pid);
+        if (prg) {
+            prg->streams[i].idx = st->index;
+            prg->streams[i].stream_identifier = stream_identifier;
+            prg->nb_streams++;
         }
 
-        memset(&dvbci, 0, sizeof(dvb_caption_info_t));
+        av_program_add_stream_index(ts->stream, h->id, st->index);
 
         desc_list_len = get16(&p, p_end);
         if (desc_list_len < 0)
-            break;
+            goto out;
         desc_list_len &= 0xfff;
-        desc_list_end = p + desc_list_len;
+        desc_list_end  = p + desc_list_len;
         if (desc_list_end > p_end)
-            break;
+            goto out;
         for(;;) {
-            if (ff_parse_mpeg2_descriptor(ts->stream, &items[last_item], stream_type, &p, desc_list_end,
-                mp4_descr, mp4_descr_count, pid, ts, &dvbci) < 0)
+            if (ff_parse_mpeg2_descriptor(ts->stream, st, stream_type, &p,
+                                          desc_list_end, mp4_descr,
+                                          mp4_descr_count, pid, ts) < 0)
                 break;
+
+            if (pes && prog_reg_desc == AV_RL32("HDMV") &&
+                stream_type == 0x83 && pes->sub_st) {
+                av_program_add_stream_index(ts->stream, h->id,
+                                            pes->sub_st->index);
+                pes->sub_st->codecpar->codec_tag = st->codecpar->codec_tag;
+            }
         }
         p = desc_list_end;
-
-        if (is_desired_stream(&items[last_item])) {
-            items[last_item].type = stream_type;
-            memcpy(&items[last_item].dvbci, &dvbci,
-                   sizeof(dvb_caption_info_t));
-            last_item++;
-        }
     }
 
     // begin MythTV
-    /* if the pmt has changed delete old streams,
-     * create new ones, and notify any listener.
+    /* if the pmt has changed notify any listener.
      */
-    equal_streams = pmt_equal_streams(ts, items, last_item);
-    if (equal_streams != last_item || ts->pid_cnt != last_item)
+    if (compare_pmt_equal(ts->stream, section, section_len))
     {
         AVFormatContext *avctx = ts->stream;
-        int idx;
-
-        /* flush out old AVPackets */
-        ff_read_frame_flush(avctx);
-
-        /* delete old streams */
-        for (idx = ts->pid_cnt-1; idx >= equal_streams; idx--)
-            av_mpegts_remove_stream(ts->stream, ts->pmt_pids[idx]);
-
-        /* create new streams */
-        for (idx = equal_streams; idx < last_item; idx++)
-            mpegts_add_stream(ts, h->id, &items[idx], prog_reg_desc, pcr_pid);
 
         /* cache pmt */
         export_pmt(avctx, section, section_len);

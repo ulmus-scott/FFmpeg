@@ -3109,7 +3109,7 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
     // begin MythTV
     /* if the pmt has changed notify any listener.
      */
-    if (compare_pmt_equal(ts->stream, section, section_len))
+    if (!compare_pmt_equal(ts->stream, section, section_len))
     {
         AVFormatContext *avctx = ts->stream;
 

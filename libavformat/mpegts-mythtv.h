@@ -217,32 +217,6 @@ typedef struct DVBAC3Descriptor {
     uint8_t  asvc;
 } DVBAC3Descriptor;
 
-typedef struct
-{
-    char language[4];
-    int comp_page;
-    int anc_page;
-    int sub_id;
-    int txt_type;
-    int vbi_data;
-    int disposition;
-    /* DSMCC data */
-    int data_id;
-    int carousel_id;
-    int component_tag;
-    unsigned int codec_tag;
-} dvb_caption_info_t;
-
-typedef struct
-{
-    int pid;
-    int type;
-    enum AVCodecID       codec_id;
-    enum AVMediaType   codec_type;
-    dvb_caption_info_t dvbci;
-} pmt_entry_t;
-
-
 /**
  * Parse an MPEG-2 descriptor
  * @param[in] fc                    Format context (used for logging only)

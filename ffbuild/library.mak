@@ -11,8 +11,8 @@ INCINSTDIR := $(INCDIR)/lib$(NAME)
 
 INSTHEADERS := $(INSTHEADERS) $(HEADERS:%=$(SUBDIR)%)
 
-all-$(CONFIG_STATIC): $(SUBDIR)$(LIBNAME)  $(SUBDIR)lib$(FULLNAME).pc
-all-$(CONFIG_SHARED): $(SUBDIR)$(SLIBNAME) $(SUBDIR)lib$(FULLNAME).pc
+all-$(CONFIG_STATIC): $(SUBDIR)$(LIBNAME)  $(SUBDIR)libmyth$(FULLNAME).pc
+all-$(CONFIG_SHARED): $(SUBDIR)$(SLIBNAME) $(SUBDIR)libmyth$(FULLNAME).pc
 
 LIBOBJS := $(OBJS) $(SHLIBOBJS) $(STLIBOBJS) $(SUBDIR)%.h.o $(TESTOBJS)
 $(LIBOBJS) $(LIBOBJS:.o=.s) $(LIBOBJS:.o=.i):   CPPFLAGS += -DHAVE_AV_CONFIG_H
@@ -46,6 +46,7 @@ endif
 
 #install-headers: install-lib$(NAME)-headers install-lib$(NAME)-pkgconfig
 install-headers: install-lib$(NAME)-headers
+install-pkgconfig: install-libmyth$(NAME)-pkgconfig
 
 install-libs-$(CONFIG_STATIC): install-lib$(NAME)-static
 install-libs-$(CONFIG_SHARED): install-lib$(NAME)-shared
@@ -66,7 +67,7 @@ $(TESTPROGS) $(TOOLS): %$(EXESUF): %.o
 $(SUBDIR)lib$(NAME).version: $(SUBDIR)version.h $(SUBDIR)version_major.h | $(SUBDIR)
 	$$(M) $$(SRC_PATH)/ffbuild/libversion.sh $(NAME) $$^ > $$@
 
-$(SUBDIR)lib$(FULLNAME).pc: $(SUBDIR)version.h ffbuild/config.sh | $(SUBDIR)
+$(SUBDIR)libmyth$(FULLNAME).pc: $(SUBDIR)version.h ffbuild/config.sh | $(SUBDIR)
 	$$(M) $$(SRC_PATH)/ffbuild/pkgconfig_generate.sh $(NAME) "$(DESC)"
 
 $(SUBDIR)lib$(NAME).ver: $(SUBDIR)lib$(NAME).v $(OBJS)
@@ -112,7 +113,7 @@ install-lib$(NAME)-headers: $(addprefix $(SUBDIR),$(HEADERS) $(BUILT_HEADERS))
 	$(Q)mkdir -p "$(INCINSTDIR)"
 	$$(INSTALL) -m 644 $$^ "$(INCINSTDIR)"
 
-install-lib$(NAME)-pkgconfig: $(SUBDIR)lib$(FULLNAME).pc
+install-libmyth$(NAME)-pkgconfig: $(SUBDIR)libmyth$(FULLNAME).pc
 	$(Q)mkdir -p "$(PKGCONFIGDIR)"
 	$$(INSTALL) -m 644 $$^ "$(PKGCONFIGDIR)"
 
@@ -129,7 +130,7 @@ uninstall-headers::
 	-rmdir "$(INCINSTDIR)"
 
 uninstall-pkgconfig::
-	$(RM) "$(PKGCONFIGDIR)/lib$(FULLNAME).pc"
+	$(RM) "$(PKGCONFIGDIR)/libmyth$(FULLNAME).pc"
 endef
 
 $(eval $(RULES))

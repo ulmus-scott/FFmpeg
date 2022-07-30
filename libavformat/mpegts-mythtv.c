@@ -1690,7 +1690,7 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, pmt_entry_t *item, int stream
 #endif
         *pp += 4;
         break;
-    case 0x0a: /* ISO 639 language descriptor */
+    case ISO_639_LANGUAGE_DESCRIPTOR:
 #ifdef UPSTREAM_TO_MYTHTV
         for (i = 0; i + 4 <= desc_len; i += 4) {
             language[i + 0] = get8(pp, desc_end);

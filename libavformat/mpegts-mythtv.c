@@ -1009,7 +1009,7 @@ static int mpegts_set_stream_info(AVStream *st, PESContext *pes,
     st->priv_data         = pes;
     st->codecpar->codec_type = AVMEDIA_TYPE_DATA;
     st->codecpar->codec_id   = AV_CODEC_ID_NONE;
-    st->need_parsing      = AVSTREAM_PARSE_FULL;
+    st->internal->need_parsing      = AVSTREAM_PARSE_FULL;
     pes->st          = st;
     pes->stream_type = stream_type;
 
@@ -1047,7 +1047,7 @@ static int mpegts_set_stream_info(AVStream *st, PESContext *pes,
             sub_st->priv_data         = sub_pes;
             sub_st->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
             sub_st->codecpar->codec_id   = AV_CODEC_ID_AC3;
-            sub_st->need_parsing      = AVSTREAM_PARSE_FULL;
+            sub_st->internal->need_parsing      = AVSTREAM_PARSE_FULL;
             sub_pes->sub_st           = pes->sub_st = sub_st;
         }
     }
@@ -1059,7 +1059,7 @@ static int mpegts_set_stream_info(AVStream *st, PESContext *pes,
     }
     if ((st->codecpar->codec_id == AV_CODEC_ID_NONE ||
             (st->internal->request_probe > 0 && st->internal->request_probe < AVPROBE_SCORE_STREAM_RETRY / 5)) &&
-        st->probe_packets > 0 &&
+        st->internal->probe_packets > 0 &&
         stream_type == STREAM_TYPE_PRIVATE_DATA) {
         st->codecpar->codec_type = AVMEDIA_TYPE_DATA;
         st->codecpar->codec_id   = AV_CODEC_ID_BIN_DATA;
@@ -1829,10 +1829,10 @@ static void m4sl_cb(MpegTSFilter *filter, const uint8_t *section,
             ff_mp4_read_dec_config_descr(s, st, &pb);
             if (st->codecpar->codec_id == AV_CODEC_ID_AAC &&
                 st->codecpar->extradata_size > 0)
-                st->need_parsing = 0;
+                st->internal->need_parsing = 0;
             if (st->codecpar->codec_id == AV_CODEC_ID_H264 &&
                 st->codecpar->extradata_size > 0)
-                st->need_parsing = 0;
+                st->internal->need_parsing = 0;
 
             st->codecpar->codec_type = avcodec_get_type(st->codecpar->codec_id);
             st->internal->need_context_update = 1;
@@ -1938,7 +1938,7 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type
                 ff_mp4_read_dec_config_descr(fc, st, &pb);
                 if (st->codecpar->codec_id == AV_CODEC_ID_AAC &&
                     st->codecpar->extradata_size > 0) {
-                    st->need_parsing = 0;
+                    st->internal->need_parsing = 0;
                     st->internal->need_context_update = 1;
                 }
                 if (st->codecpar->codec_id == AV_CODEC_ID_MPEG4SYSTEMS)
@@ -1960,7 +1960,7 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type
             ff_mp4_read_dec_config_descr(fc, st, &pb);
             if (st->codecpar->codec_id == AV_CODEC_ID_AAC &&
                 st->codecpar->extradata_size > 0) {
-                st->internal->request_probe = st->need_parsing = 0;
+                st->internal->request_probe = st->internal->need_parsing = 0;
                 st->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
                 st->internal->need_context_update = 1;
             }
@@ -2130,8 +2130,8 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type
         }
         break;
     case 0x52: /* stream identifier descriptor */
-        st->stream_identifier = 1 + get8(pp, desc_end);
-        st->component_tag     = st->stream_identifier - 1;
+        st->internal->stream_identifier = 1 + get8(pp, desc_end);
+        st->component_tag     = st->internal->stream_identifier - 1;
     // DVB_DATA_STREAM:
         /* Audio and video are sometimes encoded in private streams labelled with
          * a component tag. */
@@ -2193,7 +2193,7 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type
                 } else {
                     avpriv_request_sample(fc, "Opus in MPEG-TS - channel_config_code > 0x8");
                 }
-                st->need_parsing = AVSTREAM_PARSE_FULL;
+                st->internal->need_parsing = AVSTREAM_PARSE_FULL;
                 st->internal->need_context_update = 1;
             }
         }
@@ -2272,7 +2272,7 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type
             // Listing of data_component_ids is in STD-B10, part 2, Annex J.
             // Component tag limits are documented in TR-B14, fascicle 2,
             // Vol. 3, Section 2, 4.2.8.1
-            int actual_component_tag = st->stream_identifier - 1;
+            int actual_component_tag = st->internal->stream_identifier - 1;
             int picked_profile = FF_PROFILE_UNKNOWN;
             int data_component_id = get16(pp, desc_end);
             if (data_component_id < 0)
@@ -2819,7 +2819,7 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
             sect->st->codecpar->codec_type = AVMEDIA_TYPE_DATA;
             sect->st->codecpar->codec_id   = AV_CODEC_ID_DSMCC_B;
             sect->st->priv_data = sect;
-            sect->st->need_parsing = AVSTREAM_PARSE_NONE;
+            sect->st->internal->need_parsing = AVSTREAM_PARSE_NONE;
 
             av_log(ts, AV_LOG_DEBUG, "mpegts_add_stream: "
                    "stream #%d, has id 0x%x and codec %s, type %s at 0x%p\n",

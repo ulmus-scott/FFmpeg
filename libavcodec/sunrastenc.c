@@ -208,7 +208,7 @@ static const AVClass sunrast_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-AVCodec ff_sunrast_encoder = {
+const AVCodec ff_sunrast_encoder = {
     .name           = "sunrast",
     .long_name      = NULL_IF_CONFIG_SMALL("Sun Rasterfile image"),
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -222,4 +222,5 @@ AVCodec ff_sunrast_encoder = {
                                                   AV_PIX_FMT_GRAY8,
                                                   AV_PIX_FMT_MONOWHITE,
                                                   AV_PIX_FMT_NONE },
+    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

@@ -2101,18 +2101,11 @@ static void adpcm_flush(AVCodecContext *avctx)
         break;
 
     case AV_CODEC_ID_ADPCM_IMA_APM:
-        if (avctx->extradata) {
-            if (avctx->extradata_size >= 28) {
-                c->status[0].predictor  = av_clip_intp2(AV_RL32(avctx->extradata + 16), 18);
-                c->status[0].step_index = av_clip(AV_RL32(avctx->extradata + 20), 0, 88);
-                c->status[1].predictor  = av_clip_intp2(AV_RL32(avctx->extradata + 4), 18);
-                c->status[1].step_index = av_clip(AV_RL32(avctx->extradata + 8), 0, 88);
-            } else if (avctx->extradata_size >= 16) {
-                c->status[0].predictor  = av_clip_intp2(AV_RL32(avctx->extradata +  0), 18);
-                c->status[0].step_index = av_clip(AV_RL32(avctx->extradata +  4), 0, 88);
-                c->status[1].predictor  = av_clip_intp2(AV_RL32(avctx->extradata +  8), 18);
-                c->status[1].step_index = av_clip(AV_RL32(avctx->extradata + 12), 0, 88);
-            }
+        if (avctx->extradata && avctx->extradata_size >= 28) {
+            c->status[0].predictor  = av_clip_intp2(AV_RL32(avctx->extradata + 16), 18);
+            c->status[0].step_index = av_clip(AV_RL32(avctx->extradata + 20), 0, 88);
+            c->status[1].predictor  = av_clip_intp2(AV_RL32(avctx->extradata + 4), 18);
+            c->status[1].step_index = av_clip(AV_RL32(avctx->extradata + 8), 0, 88);
         }
         break;
 
@@ -2139,7 +2132,7 @@ static const enum AVSampleFormat sample_fmts_both[] = { AV_SAMPLE_FMT_S16,
                                                         AV_SAMPLE_FMT_NONE };
 
 #define ADPCM_DECODER(id_, sample_fmts_, name_, long_name_) \
-AVCodec ff_ ## name_ ## _decoder = {                        \
+const AVCodec ff_ ## name_ ## _decoder = {                  \
     .name           = #name_,                               \
     .long_name      = NULL_IF_CONFIG_SMALL(long_name_),     \
     .type           = AVMEDIA_TYPE_AUDIO,                   \

@@ -2560,9 +2560,14 @@ eoi_parser:
                 s->progressive && s->cur_scan && s->got_picture)
                 mjpeg_idct_scan_progressive_ac(s);
             s->cur_scan = 0;
-            if (!s->got_picture) {
+            if (!s->seen_sof) {
                 av_log(avctx, AV_LOG_WARNING,
                        "Found EOI before any SOF, ignoring\n");
+                break;
+            }
+            if (!s->got_picture && avctx->skip_frame != AVDISCARD_ALL) {
+                av_log(avctx, AV_LOG_WARNING,
+                       "Found EOI before any SOS, ignoring\n");
                 break;
             }
             if (s->interlaced) {
@@ -2961,7 +2966,7 @@ static const AVClass mjpegdec_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-AVCodec ff_mjpeg_decoder = {
+const AVCodec ff_mjpeg_decoder = {
     .name           = "mjpeg",
     .long_name      = NULL_IF_CONFIG_SMALL("MJPEG (Motion JPEG)"),
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -2989,7 +2994,7 @@ AVCodec ff_mjpeg_decoder = {
 };
 #endif
 #if CONFIG_THP_DECODER
-AVCodec ff_thp_decoder = {
+const AVCodec ff_thp_decoder = {
     .name           = "thp",
     .long_name      = NULL_IF_CONFIG_SMALL("Nintendo Gamecube THP video"),
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -3007,7 +3012,7 @@ AVCodec ff_thp_decoder = {
 #endif
 
 #if CONFIG_SMVJPEG_DECODER
-AVCodec ff_smvjpeg_decoder = {
+const AVCodec ff_smvjpeg_decoder = {
     .name           = "smvjpeg",
     .long_name      = NULL_IF_CONFIG_SMALL("SMV JPEG"),
     .type           = AVMEDIA_TYPE_VIDEO,

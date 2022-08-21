@@ -1459,27 +1459,9 @@ static int mov_get_dv_codec_tag(AVFormatContext *s, MOVTrack *track)
     return tag;
 }
 
-static AVRational find_fps(AVFormatContext *s, AVStream *st)
-{
-    AVRational rate = st->avg_frame_rate;
-
-#if FF_API_LAVF_AVCTX
-    FF_DISABLE_DEPRECATION_WARNINGS
-    rate = av_inv_q(st->codec->time_base);
-    if (av_timecode_check_frame_rate(rate) < 0) {
-        av_log(s, AV_LOG_DEBUG, "timecode: tbc=%d/%d invalid, fallback on %d/%d\n",
-               rate.num, rate.den, st->avg_frame_rate.num, st->avg_frame_rate.den);
-        rate = st->avg_frame_rate;
-    }
-    FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
-    return rate;
-}
-
 static int defined_frame_rate(AVFormatContext *s, AVStream *st)
 {
-    AVRational rational_framerate = find_fps(s, st);
+    AVRational rational_framerate = st->avg_frame_rate;
     int rate = 0;
     if (rational_framerate.den != 0)
         rate = av_q2d(rational_framerate);
@@ -1992,7 +1974,7 @@ static int mov_write_colr_tag(AVIOContext *pb, MOVTrack *track, int prefer_icc)
     // Ref (MP4): ISO/IEC 14496-12:2012
 
     const uint8_t *icc_profile;
-    buffer_size_t icc_profile_size;
+    size_t icc_profile_size;
 
     if (prefer_icc) {
         icc_profile = av_stream_get_side_data(track->st, AV_PKT_DATA_ICC_PROFILE, &icc_profile_size);
@@ -2234,13 +2216,6 @@ static int mov_write_video_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
         track->par->codec_id != AV_CODEC_ID_DNXHD) {
         int field_order = track->par->field_order;
 
-#if FF_API_LAVF_AVCTX
-    FF_DISABLE_DEPRECATION_WARNINGS
-    if (field_order != track->st->codec->field_order && track->st->codec->field_order != AV_FIELD_UNKNOWN)
-        field_order = track->st->codec->field_order;
-    FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
         if (field_order != AV_FIELD_UNKNOWN)
             mov_write_fiel_tag(pb, track, field_order);
     }
@@ -2354,15 +2329,8 @@ static int mov_write_tmcd_tag(AVIOContext *pb, MOVTrack *track)
     AVDictionaryEntry *t = NULL;
 
     if (!track->st->avg_frame_rate.num || !track->st->avg_frame_rate.den) {
-#if FF_API_LAVF_AVCTX
-    FF_DISABLE_DEPRECATION_WARNINGS
-        frame_duration = av_rescale(track->timescale, track->st->codec->time_base.num, track->st->codec->time_base.den);
-        nb_frames      = ROUNDED_DIV(track->st->codec->time_base.den, track->st->codec->time_base.num);
-    FF_ENABLE_DEPRECATION_WARNINGS
-#else
         av_log(NULL, AV_LOG_ERROR, "avg_frame_rate not set for tmcd track.\n");
         return AVERROR(EINVAL);
-#endif
     } else {
         frame_duration = av_rescale(track->timescale, track->st->avg_frame_rate.den, track->st->avg_frame_rate.num);
         nb_frames      = ROUNDED_DIV(track->st->avg_frame_rate.num, track->st->avg_frame_rate.den);
@@ -3043,11 +3011,10 @@ static int mov_write_tkhd_tag(AVIOContext *pb, MOVMuxContext *mov,
                                       AV_ROUND_UP);
     int version = duration < INT32_MAX ? 0 : 1;
     int flags   = MOV_TKHD_FLAG_IN_MOVIE;
-    int rotation = 0;
     int group   = 0;
 
     uint32_t *display_matrix = NULL;
-    buffer_size_t display_matrix_size;
+    size_t display_matrix_size;
     int       i;
 
     if (st) {
@@ -3100,23 +3067,9 @@ static int mov_write_tkhd_tag(AVIOContext *pb, MOVMuxContext *mov,
     avio_wb16(pb, 0); /* reserved */
 
     /* Matrix structure */
-#if FF_API_OLD_ROTATE_API
-    if (st && st->metadata) {
-        AVDictionaryEntry *rot = av_dict_get(st->metadata, "rotate", NULL, 0);
-        rotation = (rot && rot->value) ? atoi(rot->value) : 0;
-    }
-#endif
     if (display_matrix) {
         for (i = 0; i < 9; i++)
             avio_wb32(pb, display_matrix[i]);
-#if FF_API_OLD_ROTATE_API
-    } else if (rotation == 90) {
-        write_matrix(pb,  0,  1, -1,  0, track->par->height, 0);
-    } else if (rotation == 180) {
-        write_matrix(pb, -1,  0,  0, -1, track->par->width, track->par->height);
-    } else if (rotation == 270) {
-        write_matrix(pb,  0, -1,  1,  0, 0, track->par->width);
-#endif
     } else {
         write_matrix(pb,  1,  0,  0,  1, 0, 0);
     }
@@ -4188,7 +4141,7 @@ static int mov_write_moov_tag(AVIOContext *pb, MOVMuxContext *mov,
             track->tref_tag = MKTAG('h','i','n','t');
             track->tref_id = mov->tracks[track->src_track].track_id;
         } else if (track->par->codec_type == AVMEDIA_TYPE_AUDIO) {
-            buffer_size_t size;
+            size_t size;
             int *fallback;
             fallback = (int*)av_stream_get_side_data(track->st,
                                                      AV_PKT_DATA_FALLBACK_TRACK,
@@ -5572,7 +5525,7 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
     AVProducerReferenceTime *prft;
     unsigned int samples_in_chunk = 0;
     int size = pkt->size, ret = 0, offset = 0;
-    buffer_size_t prft_size;
+    size_t prft_size;
     uint8_t *reformatted_data = NULL;
 
     ret = check_pkt(s, pkt);
@@ -5925,7 +5878,7 @@ static int mov_write_single_packet(AVFormatContext *s, AVPacket *pkt)
             trk->par->codec_id == AV_CODEC_ID_AAC ||
             trk->par->codec_id == AV_CODEC_ID_AV1 ||
             trk->par->codec_id == AV_CODEC_ID_FLAC) {
-        buffer_size_t side_size;
+        size_t side_size;
         uint8_t *side = av_packet_get_side_data(pkt, AV_PKT_DATA_NEW_EXTRADATA, &side_size);
         if (side && side_size > 0 && (side_size != par->extradata_size || memcmp(side, par->extradata, side_size))) {
             void *newextra = av_mallocz(side_size + AV_INPUT_BUFFER_PADDING_SIZE);
@@ -6214,7 +6167,7 @@ static int mov_check_timecode_track(AVFormatContext *s, AVTimecode *tc, int src_
     int ret;
 
     /* compute the frame number */
-    ret = av_timecode_init_from_string(tc, find_fps(s,  s->streams[src_index]), tcstr, s);
+    ret = av_timecode_init_from_string(tc, s->streams[src_index]->avg_frame_rate, tcstr, s);
     return ret;
 }
 
@@ -6225,7 +6178,7 @@ static int mov_create_timecode_track(AVFormatContext *s, int index, int src_inde
     AVStream *src_st    = s->streams[src_index];
     uint8_t data[4];
     AVPacket *pkt = mov->pkt;
-    AVRational rate = find_fps(s, src_st);
+    AVRational rate = src_st->avg_frame_rate;
     int ret;
 
     /* tmcd track based on video stream */
@@ -7256,7 +7209,7 @@ static const AVCodecTag codec_f4v_tags[] = {
 
 #if CONFIG_MOV_MUXER
 MOV_CLASS(mov)
-AVOutputFormat ff_mov_muxer = {
+const AVOutputFormat ff_mov_muxer = {
     .name              = "mov",
     .long_name         = NULL_IF_CONFIG_SMALL("QuickTime / MOV"),
     .extensions        = "mov",
@@ -7279,7 +7232,7 @@ AVOutputFormat ff_mov_muxer = {
 #endif
 #if CONFIG_TGP_MUXER
 MOV_CLASS(tgp)
-AVOutputFormat ff_tgp_muxer = {
+const AVOutputFormat ff_tgp_muxer = {
     .name              = "3gp",
     .long_name         = NULL_IF_CONFIG_SMALL("3GP (3GPP file format)"),
     .extensions        = "3gp",
@@ -7299,7 +7252,7 @@ AVOutputFormat ff_tgp_muxer = {
 #endif
 #if CONFIG_MP4_MUXER
 MOV_CLASS(mp4)
-AVOutputFormat ff_mp4_muxer = {
+const AVOutputFormat ff_mp4_muxer = {
     .name              = "mp4",
     .long_name         = NULL_IF_CONFIG_SMALL("MP4 (MPEG-4 Part 14)"),
     .mime_type         = "video/mp4",
@@ -7321,7 +7274,7 @@ AVOutputFormat ff_mp4_muxer = {
 #endif
 #if CONFIG_PSP_MUXER
 MOV_CLASS(psp)
-AVOutputFormat ff_psp_muxer = {
+const AVOutputFormat ff_psp_muxer = {
     .name              = "psp",
     .long_name         = NULL_IF_CONFIG_SMALL("PSP MP4 (MPEG-4 Part 14)"),
     .extensions        = "mp4,psp",
@@ -7342,7 +7295,7 @@ AVOutputFormat ff_psp_muxer = {
 #endif
 #if CONFIG_TG2_MUXER
 MOV_CLASS(tg2)
-AVOutputFormat ff_tg2_muxer = {
+const AVOutputFormat ff_tg2_muxer = {
     .name              = "3g2",
     .long_name         = NULL_IF_CONFIG_SMALL("3GP2 (3GPP2 file format)"),
     .extensions        = "3g2",
@@ -7362,7 +7315,7 @@ AVOutputFormat ff_tg2_muxer = {
 #endif
 #if CONFIG_IPOD_MUXER
 MOV_CLASS(ipod)
-AVOutputFormat ff_ipod_muxer = {
+const AVOutputFormat ff_ipod_muxer = {
     .name              = "ipod",
     .long_name         = NULL_IF_CONFIG_SMALL("iPod H.264 MP4 (MPEG-4 Part 14)"),
     .mime_type         = "video/mp4",
@@ -7383,7 +7336,7 @@ AVOutputFormat ff_ipod_muxer = {
 #endif
 #if CONFIG_ISMV_MUXER
 MOV_CLASS(ismv)
-AVOutputFormat ff_ismv_muxer = {
+const AVOutputFormat ff_ismv_muxer = {
     .name              = "ismv",
     .long_name         = NULL_IF_CONFIG_SMALL("ISMV/ISMA (Smooth Streaming)"),
     .mime_type         = "video/mp4",
@@ -7405,7 +7358,7 @@ AVOutputFormat ff_ismv_muxer = {
 #endif
 #if CONFIG_F4V_MUXER
 MOV_CLASS(f4v)
-AVOutputFormat ff_f4v_muxer = {
+const AVOutputFormat ff_f4v_muxer = {
     .name              = "f4v",
     .long_name         = NULL_IF_CONFIG_SMALL("F4V Adobe Flash Video"),
     .mime_type         = "application/f4v",

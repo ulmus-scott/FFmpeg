@@ -1254,8 +1254,6 @@ static av_cold int vorbis_encode_close(AVCodecContext *avctx)
     ff_af_queue_close(&venc->afq);
     ff_bufqueue_discard_all(&venc->bufqueue);
 
-    av_freep(&avctx->extradata);
-
     return 0 ;
 }
 
@@ -1293,7 +1291,7 @@ error:
     return ret;
 }
 
-AVCodec ff_vorbis_encoder = {
+const AVCodec ff_vorbis_encoder = {
     .name           = "vorbis",
     .long_name      = NULL_IF_CONFIG_SMALL("Vorbis"),
     .type           = AVMEDIA_TYPE_AUDIO,

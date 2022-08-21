@@ -36,11 +36,6 @@ static av_cold int raw_encode_init(AVCodecContext *avctx)
 {
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(avctx->pix_fmt);
 
-#if FF_API_CODED_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    avctx->coded_frame->pict_type = AV_PICTURE_TYPE_I;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
     avctx->bits_per_coded_sample = av_get_bits_per_pixel(desc);
     if(!avctx->codec_tag)
         avctx->codec_tag = avcodec_pix_fmt_to_codec_tag(avctx->pix_fmt);
@@ -85,7 +80,7 @@ static int raw_encode(AVCodecContext *avctx, AVPacket *pkt,
     return 0;
 }
 
-AVCodec ff_rawvideo_encoder = {
+const AVCodec ff_rawvideo_encoder = {
     .name           = "rawvideo",
     .long_name      = NULL_IF_CONFIG_SMALL("raw video"),
     .type           = AVMEDIA_TYPE_VIDEO,

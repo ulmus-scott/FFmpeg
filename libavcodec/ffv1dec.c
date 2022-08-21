@@ -952,8 +952,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame, AVPac
                          (fs->slice_y >> sv) + ((fs->slice_x >> sh) << pixshift);
 
             }
-            if (desc->flags & AV_PIX_FMT_FLAG_PAL ||
-                desc->flags & FF_PSEUDOPAL) {
+            if (desc->flags & AV_PIX_FMT_FLAG_PAL) {
                 dst[1] = p->data[1];
                 src[1] = f->last_picture.f->data[1];
             }
@@ -1053,7 +1052,7 @@ static int update_thread_context(AVCodecContext *dst, const AVCodecContext *src)
 }
 #endif
 
-AVCodec ff_ffv1_decoder = {
+const AVCodec ff_ffv1_decoder = {
     .name           = "ffv1",
     .long_name      = NULL_IF_CONFIG_SMALL("FFmpeg video codec #1"),
     .type           = AVMEDIA_TYPE_VIDEO,

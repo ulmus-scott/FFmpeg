@@ -961,8 +961,6 @@ av_cold int ff_mpv_encode_end(AVCodecContext *avctx)
         s->out_format == FMT_MJPEG)
         ff_mjpeg_encode_close(s);
 
-    av_freep(&avctx->extradata);
-
     for (i = 0; i < FF_ARRAY_ELEMS(s->tmp_frames); i++)
         av_frame_free(&s->tmp_frames[i]);
 
@@ -1604,19 +1602,6 @@ static void frame_end(MpegEncContext *s)
     s->last_lambda_for [s->pict_type] = s->current_picture_ptr->f->quality;
     if (s->pict_type!= AV_PICTURE_TYPE_B)
         s->last_non_b_pict_type = s->pict_type;
-
-#if FF_API_CODED_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    av_frame_unref(s->avctx->coded_frame);
-    av_frame_copy_props(s->avctx->coded_frame, s->current_picture.f);
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-#if FF_API_ERROR_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    memcpy(s->current_picture.f->error, s->current_picture.encoding_error,
-           sizeof(s->current_picture.encoding_error));
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
 }
 
 static void update_noise_reduction(MpegEncContext *s)
@@ -4611,7 +4596,7 @@ static const AVClass h263_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-AVCodec ff_h263_encoder = {
+const AVCodec ff_h263_encoder = {
     .name           = "h263",
     .long_name      = NULL_IF_CONFIG_SMALL("H.263 / H.263-1996"),
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -4646,7 +4631,7 @@ static const AVClass h263p_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-AVCodec ff_h263p_encoder = {
+const AVCodec ff_h263p_encoder = {
     .name           = "h263p",
     .long_name      = NULL_IF_CONFIG_SMALL("H.263+ / H.263-1998 / H.263 version 2"),
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -4668,7 +4653,7 @@ static const AVClass msmpeg4v2_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-AVCodec ff_msmpeg4v2_encoder = {
+const AVCodec ff_msmpeg4v2_encoder = {
     .name           = "msmpeg4v2",
     .long_name      = NULL_IF_CONFIG_SMALL("MPEG-4 part 2 Microsoft variant version 2"),
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -4689,7 +4674,7 @@ static const AVClass msmpeg4v3_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-AVCodec ff_msmpeg4v3_encoder = {
+const AVCodec ff_msmpeg4v3_encoder = {
     .name           = "msmpeg4",
     .long_name      = NULL_IF_CONFIG_SMALL("MPEG-4 part 2 Microsoft variant version 3"),
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -4710,7 +4695,7 @@ static const AVClass wmv1_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-AVCodec ff_wmv1_encoder = {
+const AVCodec ff_wmv1_encoder = {
     .name           = "wmv1",
     .long_name      = NULL_IF_CONFIG_SMALL("Windows Media Video 7"),
     .type           = AVMEDIA_TYPE_VIDEO,

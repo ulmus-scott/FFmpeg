@@ -310,7 +310,8 @@ OBJS-$(CONFIG_EAMAD_DECODER)           += eamad.o eaidct.o mpeg12.o \
                                           mpeg12data.o
 OBJS-$(CONFIG_EATGQ_DECODER)           += eatgq.o eaidct.o
 OBJS-$(CONFIG_EATGV_DECODER)           += eatgv.o
-OBJS-$(CONFIG_EATQI_DECODER)           += eatqi.o eaidct.o mpeg12.o mpeg12data.o mpegvideodata.o rl.o
+OBJS-$(CONFIG_EATQI_DECODER)           += eatqi.o eaidct.o mpeg12.o \
+                                          mpeg12data.o mpegvideodata.o
 OBJS-$(CONFIG_EIGHTBPS_DECODER)        += 8bps.o
 OBJS-$(CONFIG_EIGHTSVX_EXP_DECODER)    += 8svx.o
 OBJS-$(CONFIG_EIGHTSVX_FIB_DECODER)    += 8svx.o
@@ -1073,7 +1074,7 @@ OBJS-$(CONFIG_AAC_PARSER)              += aac_parser.o aac_ac3_parser.o \
                                           mpeg4audio.o
 OBJS-$(CONFIG_AC3_PARSER)              += ac3tab.o aac_ac3_parser.o
 OBJS-$(CONFIG_ADX_PARSER)              += adx_parser.o adx.o
-OBJS-$(CONFIG_AV1_PARSER)              += av1_parser.o av1_parse.o
+OBJS-$(CONFIG_AV1_PARSER)              += av1_parser.o
 OBJS-$(CONFIG_AVS2_PARSER)             += avs2_parser.o
 OBJS-$(CONFIG_AVS3_PARSER)             += avs3_parser.o
 OBJS-$(CONFIG_BMP_PARSER)              += bmp_parser.o
@@ -1157,7 +1158,7 @@ OBJS-$(CONFIG_NULL_BSF)                   += null_bsf.o
 OBJS-$(CONFIG_OPUS_METADATA_BSF)          += opus_metadata_bsf.o
 OBJS-$(CONFIG_PCM_RECHUNK_BSF)            += pcm_rechunk_bsf.o
 OBJS-$(CONFIG_PRORES_METADATA_BSF)        += prores_metadata_bsf.o
-OBJS-$(CONFIG_REMOVE_EXTRADATA_BSF)       += remove_extradata_bsf.o
+OBJS-$(CONFIG_REMOVE_EXTRADATA_BSF)       += remove_extradata_bsf.o av1_parse.o
 OBJS-$(CONFIG_SETTS_BSF)                  += setts_bsf.o
 OBJS-$(CONFIG_TEXT2MOVSUB_BSF)            += movsub_bsf.o
 OBJS-$(CONFIG_TRACE_HEADERS_BSF)          += trace_headers_bsf.o

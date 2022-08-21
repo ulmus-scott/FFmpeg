@@ -61,7 +61,7 @@ static int srt_write_packet(AVFormatContext *avf, AVPacket *pkt)
     SRTContext *srt = avf->priv_data;
 
     int64_t s = pkt->pts, e, d = pkt->duration;
-    buffer_size_t size;
+    size_t size;
     int x1 = -1, y1 = -1, x2 = -1, y2 = -1;
     const uint8_t *p;
 
@@ -96,7 +96,7 @@ static int srt_write_packet(AVFormatContext *avf, AVPacket *pkt)
     return 0;
 }
 
-AVOutputFormat ff_srt_muxer = {
+const AVOutputFormat ff_srt_muxer = {
     .name           = "srt",
     .long_name      = NULL_IF_CONFIG_SMALL("SubRip subtitle"),
     .mime_type      = "application/x-subrip",

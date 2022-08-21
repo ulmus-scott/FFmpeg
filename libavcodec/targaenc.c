@@ -184,13 +184,6 @@ static av_cold int targa_encode_init(AVCodecContext *avctx)
         return AVERROR(EINVAL);
     }
 
-#if FF_API_CODED_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    avctx->coded_frame->key_frame = 1;
-    avctx->coded_frame->pict_type = AV_PICTURE_TYPE_I;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
     return 0;
 }
 
@@ -209,7 +202,7 @@ static const AVClass targa_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-AVCodec ff_targa_encoder = {
+const AVCodec ff_targa_encoder = {
     .name           = "targa",
     .long_name      = NULL_IF_CONFIG_SMALL("Truevision Targa image"),
     .type           = AVMEDIA_TYPE_VIDEO,

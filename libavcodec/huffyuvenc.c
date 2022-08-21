@@ -222,13 +222,6 @@ static av_cold int encode_init(AVCodecContext *avctx)
     if (!avctx->extradata)
         return AVERROR(ENOMEM);
 
-#if FF_API_CODED_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    avctx->coded_frame->pict_type = AV_PICTURE_TYPE_I;
-    avctx->coded_frame->key_frame = 1;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
     s->bps = desc->comp[0].depth;
     s->yuv = !(desc->flags & AV_PIX_FMT_FLAG_RGB) && desc->nb_components >= 2;
     s->chroma = desc->nb_components > 2;
@@ -1012,7 +1005,6 @@ static av_cold int encode_end(AVCodecContext *avctx)
 
     ff_huffyuv_common_end(s);
 
-    av_freep(&avctx->extradata);
     av_freep(&avctx->stats_out);
 
     return 0;
@@ -1055,7 +1047,7 @@ static const AVClass ff_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-AVCodec ff_huffyuv_encoder = {
+const AVCodec ff_huffyuv_encoder = {
     .name           = "huffyuv",
     .long_name      = NULL_IF_CONFIG_SMALL("Huffyuv / HuffYUV"),
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -1075,7 +1067,7 @@ AVCodec ff_huffyuv_encoder = {
 };
 
 #if CONFIG_FFVHUFF_ENCODER
-AVCodec ff_ffvhuff_encoder = {
+const AVCodec ff_ffvhuff_encoder = {
     .name           = "ffvhuff",
     .long_name      = NULL_IF_CONFIG_SMALL("Huffyuv FFmpeg variant"),
     .type           = AVMEDIA_TYPE_VIDEO,

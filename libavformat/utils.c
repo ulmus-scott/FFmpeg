@@ -158,13 +158,6 @@ int ff_copy_whiteblacklists(AVFormatContext *dst, const AVFormatContext *src)
 
 static const AVCodec *find_decoder(AVFormatContext *s, const AVStream *st, enum AVCodecID codec_id)
 {
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-    if (st->codec->codec)
-        return st->codec->codec;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
     switch (st->codecpar->codec_type) {
     case AVMEDIA_TYPE_VIDEO:
         if (s->video_codec)    return s->video_codec;
@@ -354,12 +347,6 @@ static int set_codec_from_probe_data(AVFormatContext *s, AVStream *st,
                 st->codecpar->codec_id   = fmt_id_type[i].id;
                 st->codecpar->codec_type = fmt_id_type[i].type;
                 st->internal->need_context_update = 1;
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-                st->codec->codec_type = st->codecpar->codec_type;
-                st->codec->codec_id   = st->codecpar->codec_id;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
                 return score;
             }
         }
@@ -370,27 +357,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
 /************************************************************/
 /* input media file */
 
-#if FF_API_DEMUXER_OPEN
-int av_demuxer_open(AVFormatContext *ic) {
-    int err;
-
-    if (ic->format_whitelist && av_match_list(ic->iformat->name, ic->format_whitelist, ',') <= 0) {
-        av_log(ic, AV_LOG_ERROR, "Format not on whitelist \'%s\'\n", ic->format_whitelist);
-        return AVERROR(EINVAL);
-    }
-
-    if (ic->iformat->read_header) {
-        err = ic->iformat->read_header(ic);
-        if (err < 0)
-            return err;
-    }
-
-    if (ic->pb && !ic->internal->data_offset)
-        ic->internal->data_offset = avio_tell(ic->pb);
-
-    return 0;
-}
-#endif
 /* Open input file and probe the format if necessary. */
 static int init_input(AVFormatContext *s, const char *filename,
                       AVDictionary **options)
@@ -501,15 +467,6 @@ static int update_stream_avctx(AVFormatContext *s)
         if (ret < 0)
             return ret;
 
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-        /* update deprecated public codec context */
-        ret = avcodec_parameters_to_context(st->codec, st->codecpar);
-        if (ret < 0)
-            return ret;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
         st->internal->need_context_update = 0;
     }
     return 0;
@@ -547,11 +504,6 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
         goto fail;
     }
 
-#if FF_API_FORMAT_FILENAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    av_strlcpy(s->filename, filename ? filename : "", sizeof(s->filename));
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
     if ((ret = init_input(s, filename, &tmp)) < 0)
         goto fail;
     s->probe_score = ret;
@@ -608,11 +560,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     if (s->pb)
         ff_id3v2_read_dict(s->pb, &s->internal->id3v2_meta, ID3v2_DEFAULT_MAGIC, &id3v2_extra_meta);
 
-#if FF_API_DEMUXER_OPEN
-    if (!(s->flags&AVFMT_FLAG_PRIV_OPT) && s->iformat->read_header)
-#else
     if (s->iformat->read_header)
-#endif
         if ((ret = s->iformat->read_header(s)) < 0)
             goto fail;
 
@@ -641,11 +589,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     if ((ret = avformat_queue_attached_pictures(s)) < 0)
         goto close;
 
-#if FF_API_DEMUXER_OPEN
-    if (!(s->flags&AVFMT_FLAG_PRIV_OPT) && s->pb && !s->internal->data_offset)
-#else
     if (s->pb && !s->internal->data_offset)
-#endif
         s->internal->data_offset = avio_tell(s->pb);
 
     s->internal->raw_packet_buffer_remaining_size = RAW_PACKET_BUFFER_SIZE;
@@ -956,13 +900,6 @@ void ff_compute_frame_duration(AVFormatContext *s, int *pnum, int *pden, AVStrea
     AVRational codec_framerate = s->iformat ? st->internal->avctx->framerate :
                                               av_mul_q(av_inv_q(st->internal->avctx->time_base), (AVRational){1, st->internal->avctx->ticks_per_frame});
     int frame_size, sample_rate;
-
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-    if ((!codec_framerate.den || !codec_framerate.num) && st->codec->time_base.den && st->codec->time_base.num)
-        codec_framerate = av_mul_q(av_inv_q(st->codec->time_base), (AVRational){1, st->codec->ticks_per_frame});
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
 
     *pnum = 0;
     *pden = 0;
@@ -1596,17 +1533,6 @@ static int read_frame_internal(AVFormatContext *s, AVPacket *pkt)
                 return ret;
             }
 
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-            /* update deprecated public codec context */
-            ret = avcodec_parameters_to_context(st->codec, st->codecpar);
-            if (ret < 0) {
-                av_packet_unref(pkt);
-                return ret;
-            }
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
             st->internal->need_context_update = 0;
         }
 
@@ -1729,10 +1655,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
         av_dict_free(&metadata);
         av_opt_set_dict_val(s, "metadata", NULL, AV_OPT_SEARCH_CHILDREN);
     }
-
-#if FF_API_LAVF_AVCTX
-    update_stream_avctx(s);
-#endif
 
     if (s->debug & FF_FDEBUG_TS)
         av_log(s, AV_LOG_DEBUG,
@@ -3708,15 +3630,6 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
         }
 
         /* check if the caller has overridden the codec id */
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-        if (st->codec->codec_id != st->internal->orig_codec_id) {
-            st->codecpar->codec_id   = st->codec->codec_id;
-            st->codecpar->codec_type = st->codec->codec_type;
-            st->internal->orig_codec_id = st->codec->codec_id;
-        }
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
         // only for the split stuff
         if (!st->parser && !(ic->flags & AVFMT_FLAG_NOPARSE) && st->internal->request_probe <= 0) {
             st->parser = av_parser_init(st->codecpar->codec_id);
@@ -4219,42 +4132,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
                 goto find_stream_info_err;
         }
 
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-        ret = avcodec_parameters_to_context(st->codec, st->codecpar);
-        if (ret < 0)
-            goto find_stream_info_err;
-
-        // The old API (AVStream.codec) "requires" the resolution to be adjusted
-        // by the lowres factor.
-        if (st->internal->avctx->lowres && st->internal->avctx->width) {
-            st->codec->lowres = st->internal->avctx->lowres;
-            st->codec->width = st->internal->avctx->width;
-            st->codec->height = st->internal->avctx->height;
-        }
-
-        if (st->codec->codec_tag != MKTAG('t','m','c','d')) {
-            st->codec->time_base = st->internal->avctx->time_base;
-            st->codec->ticks_per_frame = st->internal->avctx->ticks_per_frame;
-        }
-        st->codec->framerate = st->avg_frame_rate;
-
-        if (st->internal->avctx->subtitle_header) {
-            st->codec->subtitle_header = av_malloc(st->internal->avctx->subtitle_header_size);
-            if (!st->codec->subtitle_header)
-                goto find_stream_info_err;
-            st->codec->subtitle_header_size = st->internal->avctx->subtitle_header_size;
-            memcpy(st->codec->subtitle_header, st->internal->avctx->subtitle_header,
-                   st->codec->subtitle_header_size);
-        }
-
-        // Fields unavailable in AVCodecParameters
-        st->codec->coded_width = st->internal->avctx->coded_width;
-        st->codec->coded_height = st->internal->avctx->coded_height;
-        st->codec->properties = st->internal->avctx->properties;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
         st->internal->avctx_inited = 0;
     }
 
@@ -4296,7 +4173,7 @@ AVProgram *av_find_program_from_stream(AVFormatContext *ic, AVProgram *last, int
 
 int av_find_best_stream(AVFormatContext *ic, enum AVMediaType type,
                         int wanted_stream_nb, int related_stream,
-                        AVCodec **decoder_ret, int flags)
+                        const AVCodec **decoder_ret, int flags)
 {
     int i, nb_streams = ic->nb_streams;
     int ret = AVERROR_STREAM_NOT_FOUND;
@@ -4356,7 +4233,7 @@ int av_find_best_stream(AVFormatContext *ic, enum AVMediaType type,
         }
     }
     if (decoder_ret)
-        *decoder_ret = (AVCodec*)best_decoder;
+        *decoder_ret = best_decoder;
     return ret;
 }
 
@@ -4464,11 +4341,6 @@ static void free_stream(AVStream **pst)
 
     av_dict_free(&st->metadata);
     avcodec_parameters_free(&st->codecpar);
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-    avcodec_free_context(&st->codec);
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
     av_freep(&st->priv_data);
 
     av_freep(pst);
@@ -4576,16 +4448,6 @@ AVStream *avformat_new_stream(AVFormatContext *s, const AVCodec *c)
     if (!st)
         return NULL;
 
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-    st->codec = avcodec_alloc_context3(c);
-    if (!st->codec) {
-        av_free(st);
-        return NULL;
-    }
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
     st->internal = av_mallocz(sizeof(*st->internal));
     if (!st->internal)
         goto fail;
@@ -4604,13 +4466,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
         goto fail;
 
     if (s->iformat) {
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-        /* no default bitrate if decoding */
-        st->codec->bit_rate = 0;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
         /* default pts setting is MPEG-like */
         avpriv_set_pts_info(st, 33, 1, 90000);
         /* we set the current DTS to 0 so that formats without any timestamps
@@ -4685,11 +4540,7 @@ AVProgram *av_new_program(AVFormatContext *ac, int id)
     return program;
 }
 
-#if FF_API_CHAPTER_ID_INT
-AVChapter *avpriv_new_chapter(AVFormatContext *s, int id, AVRational time_base,
-#else
 AVChapter *avpriv_new_chapter(AVFormatContext *s, int64_t id, AVRational time_base,
-#endif
                               int64_t start, int64_t end, const char *title)
 {
     AVChapter *chapter = NULL;
@@ -5022,11 +4873,6 @@ void avpriv_set_pts_info(AVStream *s, int pts_wrap_bits,
         return;
     }
     s->time_base     = new_tb;
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-    s->codec->pkt_timebase = new_tb;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
     s->internal->avctx->pkt_timebase = new_tb;
     s->pts_wrap_bits = pts_wrap_bits;
 }
@@ -5254,16 +5100,8 @@ static int match_stream_specifier(AVFormatContext *s, AVStream *st,
             if (*spec && *spec++ != ':')         /* If we are not at the end, then another specifier must follow. */
                 return AVERROR(EINVAL);
 
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-            if (type != st->codecpar->codec_type
-               && (st->codecpar->codec_type != AVMEDIA_TYPE_UNKNOWN || st->codec->codec_type != type))
-                match = 0;
-    FF_ENABLE_DEPRECATION_WARNINGS
-#else
             if (type != st->codecpar->codec_type)
                 match = 0;
-#endif
             if (nopic && (st->disposition & AV_DISPOSITION_ATTACHED_PIC))
                 match = 0;
         } else if (*spec == 'p' && *(spec + 1) == ':') {
@@ -5330,35 +5168,16 @@ FF_DISABLE_DEPRECATION_WARNINGS
             return match && ret;
         } else if (*spec == 'u' && *(spec + 1) == '\0') {
             AVCodecParameters *par = st->codecpar;
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-            AVCodecContext *codec = st->codec;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
             int val;
             switch (par->codec_type) {
             case AVMEDIA_TYPE_AUDIO:
                 val = par->sample_rate && par->channels;
-#if FF_API_LAVF_AVCTX
-                val = val || (codec->sample_rate && codec->channels);
-#endif
-                if (par->format == AV_SAMPLE_FMT_NONE
-#if FF_API_LAVF_AVCTX
-                    && codec->sample_fmt == AV_SAMPLE_FMT_NONE
-#endif
-                    )
+                if (par->format == AV_SAMPLE_FMT_NONE)
                     return 0;
                 break;
             case AVMEDIA_TYPE_VIDEO:
                 val = par->width && par->height;
-#if FF_API_LAVF_AVCTX
-                val = val || (codec->width && codec->height);
-#endif
-                if (par->format == AV_PIX_FMT_NONE
-#if FF_API_LAVF_AVCTX
-                    && codec->pix_fmt == AV_PIX_FMT_NONE
-#endif
-                    )
+                if (par->format == AV_PIX_FMT_NONE)
                     return 0;
                 break;
             case AVMEDIA_TYPE_UNKNOWN:
@@ -5368,11 +5187,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
                 val = 1;
                 break;
             }
-#if FF_API_LAVF_AVCTX
-            return match && ((par->codec_id != AV_CODEC_ID_NONE || codec->codec_id != AV_CODEC_ID_NONE) && val != 0);
-#else
             return match && (par->codec_id != AV_CODEC_ID_NONE && val != 0);
-#endif
         } else {
             return AVERROR(EINVAL);
         }
@@ -5562,7 +5377,7 @@ int ff_generate_avci_extradata(AVStream *st)
 }
 
 uint8_t *av_stream_get_side_data(const AVStream *st,
-                                 enum AVPacketSideDataType type, buffer_size_t *size)
+                                 enum AVPacketSideDataType type, size_t *size)
 {
     int i;
 
@@ -5615,7 +5430,7 @@ int av_stream_add_side_data(AVStream *st, enum AVPacketSideDataType type,
 }
 
 uint8_t *av_stream_new_side_data(AVStream *st, enum AVPacketSideDataType type,
-                                 buffer_size_t size)
+                                 size_t size)
 {
     int ret;
     uint8_t *data = av_malloc(size);
@@ -5731,7 +5546,7 @@ int ff_standardize_creation_time(AVFormatContext *s)
 int ff_get_packet_palette(AVFormatContext *s, AVPacket *pkt, int ret, uint32_t *palette)
 {
     uint8_t *side_data;
-    buffer_size_t size;
+    size_t size;
 
     side_data = av_packet_get_side_data(pkt, AV_PKT_DATA_PALETTE, &size);
     if (side_data) {
@@ -5784,15 +5599,8 @@ int avformat_transfer_internal_stream_timing_info(const AVOutputFormat *ofmt,
     const AVCodecContext *dec_ctx;
     AVCodecContext       *enc_ctx;
 
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-    dec_ctx = ist->codec;
-    enc_ctx = ost->codec;
-FF_ENABLE_DEPRECATION_WARNINGS
-#else
     dec_ctx = ist->internal->avctx;
     enc_ctx = ost->internal->avctx;
-#endif
 
     enc_ctx->time_base = ist->time_base;
     /*
@@ -5848,13 +5656,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
 AVRational av_stream_get_codec_timebase(const AVStream *st)
 {
     // See avformat_transfer_internal_stream_timing_info() TODO.
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-    return st->codec->time_base;
-FF_ENABLE_DEPRECATION_WARNINGS
-#else
     return st->internal->avctx->time_base;
-#endif
 }
 
 void ff_format_set_url(AVFormatContext *s, char *url)
@@ -5862,11 +5664,6 @@ void ff_format_set_url(AVFormatContext *s, char *url)
     av_assert0(url);
     av_freep(&s->url);
     s->url = url;
-#if FF_API_FORMAT_FILENAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    av_strlcpy(s->filename, url, sizeof(s->filename));
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
 }
 
 /**

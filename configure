@@ -132,7 +132,6 @@ Component options:
   --disable-swscale        disable libswscale build
   --disable-postproc       disable libpostproc build
   --disable-avfilter       disable libavfilter build
-  --enable-avresample      enable libavresample build (deprecated) [no]
   --disable-pthreads       disable pthreads [autodetect]
   --disable-w32threads     disable Win32 threads [autodetect]
   --disable-os2threads     disable OS/2 threads [autodetect]
@@ -1452,10 +1451,34 @@ test_pkg_config(){
         set_sanitized "${name}_extralibs" $pkg_libs
 }
 
+test_pkg_config_cpp(){
+    log test_pkg_config_cpp "$@"
+    name="$1"
+    pkg_version="$2"
+    pkg="${2%% *}"
+    headers="$3"
+    cond="$4"
+    shift 4
+    disable $name
+    test_cmd $pkg_config --exists --print-errors $pkg_version || return
+    pkg_cflags=$($pkg_config --cflags $pkg_config_flags $pkg)
+    pkg_incdir=$($pkg_config --variable=includedir $pkg_config_flags $pkg)
+    test_cpp_condition "$pkg_incdir/$headers" "$cond" "$@" &&
+        enable $name &&
+        set_sanitized "${name}_cflags" $pkg_cflags
+}
+
 check_pkg_config(){
     log check_pkg_config "$@"
     name="$1"
     test_pkg_config "$@" &&
+        eval add_cflags \$${name}_cflags
+}
+
+check_pkg_config_cpp(){
+    log check_pkg_config_cpp "$@"
+    name="$1"
+    test_pkg_config_cpp "$@" &&
         eval add_cflags \$${name}_cflags
 }
 
@@ -1580,6 +1603,12 @@ require_pkg_config(){
     log require_pkg_config "$@"
     pkg_version="$2"
     check_pkg_config "$@" || die "ERROR: $pkg_version not found using pkg-config$pkg_config_fail_message"
+}
+
+require_pkg_config_cpp(){
+    log require_pkg_config_cpp "$@"
+    pkg_version="$2"
+    check_pkg_config_cpp "$@" || die "ERROR: $pkg_version not found using pkg-config$pkg_config_fail_message"
 }
 
 test_host_cc(){
@@ -1901,7 +1930,6 @@ LIBRARY_LIST="
     avformat
     avcodec
     swresample
-    avresample
     avutil
 "
 
@@ -2922,6 +2950,7 @@ nvdec_deps="ffnvcodec"
 vaapi_x11_deps="xlib"
 videotoolbox_hwaccel_deps="videotoolbox pthreads"
 videotoolbox_hwaccel_extralibs="-framework QuartzCore"
+vulkan_deps_any="libdl LoadLibrary"
 xvmc_deps="X11_extensions_XvMClib_h"
 
 av1_d3d11va_hwaccel_deps="d3d11va DXVA_PicParams_AV1"
@@ -3523,7 +3552,7 @@ ass_filter_deps="libass"
 atempo_filter_deps="avcodec"
 atempo_filter_select="rdft"
 avgblur_opencl_filter_deps="opencl"
-avgblur_vulkan_filter_deps="vulkan libglslang"
+avgblur_vulkan_filter_deps="vulkan_lib libglslang"
 azmq_filter_deps="libzmq"
 blackframe_filter_deps="gpl"
 bm3d_filter_deps="avcodec"
@@ -3531,7 +3560,7 @@ bm3d_filter_select="dct"
 boxblur_filter_deps="gpl"
 boxblur_opencl_filter_deps="opencl gpl"
 bs2b_filter_deps="libbs2b"
-chromaber_vulkan_filter_deps="vulkan libglslang"
+chromaber_vulkan_filter_deps="vulkan_lib libglslang"
 colorkey_opencl_filter_deps="opencl"
 colormatrix_filter_deps="gpl"
 convolution_opencl_filter_deps="opencl"
@@ -3596,7 +3625,7 @@ openclsrc_filter_deps="opencl"
 overlay_opencl_filter_deps="opencl"
 overlay_qsv_filter_deps="libmfx"
 overlay_qsv_filter_select="qsvvpp"
-overlay_vulkan_filter_deps="vulkan libglslang"
+overlay_vulkan_filter_deps="vulkan_lib libglslang"
 owdenoise_filter_deps="gpl"
 pad_opencl_filter_deps="opencl"
 pan_filter_deps="swresample"
@@ -3610,7 +3639,6 @@ program_opencl_filter_deps="opencl"
 pullup_filter_deps="gpl"
 removelogo_filter_deps="avcodec avformat swscale"
 repeatfields_filter_deps="gpl"
-resample_filter_deps="avresample"
 roberts_opencl_filter_deps="opencl"
 rubberband_filter_deps="librubberband"
 sab_filter_deps="gpl swscale"
@@ -3666,7 +3694,7 @@ zmq_filter_deps="libzmq"
 zoompan_filter_deps="swscale"
 zscale_filter_deps="libzimg const_nan"
 scale_vaapi_filter_deps="vaapi"
-scale_vulkan_filter_deps="vulkan libglslang"
+scale_vulkan_filter_deps="vulkan_lib libglslang"
 vpp_qsv_filter_deps="libmfx"
 vpp_qsv_filter_select="qsvvpp"
 xfade_opencl_filter_deps="opencl"
@@ -3712,8 +3740,6 @@ avfilter_deps="avutil"
 avfilter_suggest="libm stdatomic"
 avformat_deps="avcodec avutil"
 avformat_suggest="libm network zlib stdatomic"
-avresample_deps="avutil"
-avresample_suggest="libm"
 avutil_suggest="clock_gettime ffnvcodec libm libdrm libmfx opencl user32 vaapi vulkan videotoolbox corefoundation corevideo coremedia bcrypt stdatomic"
 postproc_deps="avutil gpl"
 postproc_suggest="libm stdatomic"
@@ -3796,7 +3822,7 @@ intrinsics="none"
 enable $PROGRAM_LIST
 enable $DOCUMENT_LIST
 enable $EXAMPLE_LIST
-enable $(filter_out avresample $LIBRARY_LIST)
+enable $LIBRARY_LIST
 enable stripping
 
 enable asm
@@ -3906,7 +3932,7 @@ find_things_extern(){
 
 find_filters_extern(){
     file=$source_path/$1
-    sed -n 's/^extern AVFilter ff_[avfsinkrc]\{2,5\}_\([[:alnum:]_]\{1,\}\);/\1_filter/p' $file
+    sed -n 's/^extern const AVFilter ff_[avfsinkrc]\{2,5\}_\([[:alnum:]_]\{1,\}\);/\1_filter/p' $file
 }
 
 FILTER_LIST=$(find_filters_extern libavfilter/allfilters.c)
@@ -6754,8 +6780,12 @@ enabled vdpau &&
 
 enabled crystalhd && check_lib crystalhd "stdint.h libcrystalhd/libcrystalhd_if.h" DtsCrystalHDVersion -lcrystalhd
 
-enabled vulkan &&
-    require_pkg_config vulkan "vulkan >= 1.1.97" "vulkan/vulkan.h" vkCreateInstance
+if enabled vulkan; then
+    require_pkg_config_cpp vulkan "vulkan >= 1.1.97" "vulkan/vulkan.h" "defined VK_VERSION_1_1" ||
+        require_cpp_condition vulkan "vulkan/vulkan.h" "defined VK_VERSION_1_1"
+    # vulkan_lib should be removed once glslang filters are updated
+    check_pkg_config vulkan_lib "vulkan >= 1.1.97" "vulkan/vulkan.h" vkCreateInstance
+fi
 
 if enabled x86; then
     case $target_os in
@@ -6856,7 +6886,7 @@ EOF
 
 # add some linker flags
 check_ldflags -Wl,--warn-common
-check_ldflags -Wl,-rpath-link=:libpostproc:libswresample:libswscale:libavfilter:libavdevice:libavformat:libavcodec:libavutil:libavresample
+check_ldflags -Wl,-rpath-link=:libpostproc:libswresample:libswscale:libavfilter:libavdevice:libavformat:libavcodec:libavutil
 enabled rpath && add_ldexeflags -Wl,-rpath,$libdir && add_ldsoflags -Wl,-rpath,$libdir
 test_ldflags -Wl,-Bsymbolic && append SHFLAGS -Wl,-Bsymbolic
 
@@ -6865,34 +6895,24 @@ check_stripflags -x
 
 enabled neon_clobber_test &&
     check_ldflags -Wl,--wrap,avcodec_open2              \
-                  -Wl,--wrap,avcodec_decode_audio4      \
-                  -Wl,--wrap,avcodec_decode_video2      \
                   -Wl,--wrap,avcodec_decode_subtitle2   \
-                  -Wl,--wrap,avcodec_encode_audio2      \
-                  -Wl,--wrap,avcodec_encode_video2      \
                   -Wl,--wrap,avcodec_encode_subtitle    \
                   -Wl,--wrap,avcodec_send_packet        \
                   -Wl,--wrap,avcodec_receive_packet     \
                   -Wl,--wrap,avcodec_send_frame         \
                   -Wl,--wrap,avcodec_receive_frame      \
-                  -Wl,--wrap,swr_convert                \
-                  -Wl,--wrap,avresample_convert ||
+                  -Wl,--wrap,swr_convert        ||
     disable neon_clobber_test
 
 enabled xmm_clobber_test &&
     check_ldflags -Wl,--wrap,avcodec_open2              \
-                  -Wl,--wrap,avcodec_decode_audio4      \
-                  -Wl,--wrap,avcodec_decode_video2      \
                   -Wl,--wrap,avcodec_decode_subtitle2   \
-                  -Wl,--wrap,avcodec_encode_audio2      \
-                  -Wl,--wrap,avcodec_encode_video2      \
                   -Wl,--wrap,avcodec_encode_subtitle    \
                   -Wl,--wrap,avcodec_send_packet        \
                   -Wl,--wrap,avcodec_receive_packet     \
                   -Wl,--wrap,avcodec_send_frame         \
                   -Wl,--wrap,avcodec_receive_frame      \
                   -Wl,--wrap,swr_convert                \
-                  -Wl,--wrap,avresample_convert         \
                   -Wl,--wrap,sws_scale ||
     disable xmm_clobber_test
 
@@ -7103,6 +7123,12 @@ esac
 
 enable frame_thread_encoder
 
+# these filters depend on removed avcodec APIs
+# they are kept disabled for now, but will be removed if
+# nobody updates and re-enables them
+disable mcdeint_filter
+disable uspp_filter
+
 enabled asm || { arch=c; disable $ARCH_LIST $ARCH_EXT_LIST; }
 
 check_deps $CONFIG_LIST       \
@@ -7111,7 +7137,6 @@ check_deps $CONFIG_LIST       \
            $ALL_COMPONENTS    \
 
 enabled threads && ! enabled pthreads && ! enabled atomics_native && die "non pthread threading without atomics not supported, try adding --enable-pthreads or --cpu=i486 or higher if you are on x86"
-enabled avresample && warn "Building with deprecated library libavresample"
 
 case $target_os in
 haiku)
@@ -7227,7 +7252,6 @@ enabled movie_filter    && prepend avfilter_deps "avformat avcodec"
 enabled pan_filter          && prepend avfilter_deps "swresample"
 enabled pp_filter           && prepend avfilter_deps "postproc"
 enabled removelogo_filter   && prepend avfilter_deps "avformat avcodec swscale"
-enabled resample_filter && prepend avfilter_deps "avresample"
 enabled sab_filter          && prepend avfilter_deps "swscale"
 enabled scale_filter    && prepend avfilter_deps "swscale"
 enabled scale2ref_filter    && prepend avfilter_deps "swscale"
@@ -7659,7 +7683,7 @@ cp_if_changed $TMPH libavutil/avconfig.h
 # full_filter_name_foo=vf_foo
 # full_filter_name_bar=asrc_bar
 # ...
-eval "$(sed -n "s/^extern AVFilter ff_\([avfsinkrc]\{2,5\}\)_\(.*\);/full_filter_name_\2=\1_\2/p" $source_path/libavfilter/allfilters.c)"
+eval "$(sed -n "s/^extern const AVFilter ff_\([avfsinkrc]\{2,5\}\)_\(.*\);/full_filter_name_\2=\1_\2/p" $source_path/libavfilter/allfilters.c)"
 
 # generate the lists of enabled components
 print_enabled_components(){
@@ -7721,7 +7745,6 @@ extralibs_avcodec="$avcodec_extralibs"
 extralibs_avformat="$avformat_extralibs"
 extralibs_avdevice="$avdevice_extralibs"
 extralibs_avfilter="$avfilter_extralibs"
-extralibs_avresample="$avresample_extralibs"
 extralibs_postproc="$postproc_extralibs"
 extralibs_swscale="$swscale_extralibs"
 extralibs_swresample="$swresample_extralibs"

@@ -1618,21 +1618,9 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
         s->lambda = 0;
     }//else keep previous frame's qlog until after motion estimation
 
-#if FF_API_CODED_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    av_frame_unref(avctx->coded_frame);
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
     if (s->current_picture->data[0]) {
         int w = s->avctx->width;
         int h = s->avctx->height;
-
-#if FF_API_CODED_FRAME
-        ret = av_frame_make_writable(s->current_picture);
-        if (ret < 0)
-            return ret;
-#endif
 
         s->mpvencdsp.draw_edges(s->current_picture->data[0],
                                 s->current_picture->linesize[0], w   , h   ,
@@ -1649,13 +1637,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
     }
 
     ff_snow_frame_start(s);
-#if FF_API_CODED_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    ret = av_frame_ref(avctx->coded_frame, s->current_picture);
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-    if (ret < 0)
-        return ret;
 
     s->m.current_picture_ptr= &s->m.current_picture;
     s->m.current_picture.f = s->current_picture;
@@ -1884,12 +1865,6 @@ redo_frame:
                                    (s->avctx->flags&AV_CODEC_FLAG_PSNR) ? 4 : 0,
                                    s->current_picture->pict_type);
 
-#if FF_API_ERROR_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    memcpy(s->current_picture->error, s->encoding_error, sizeof(s->encoding_error));
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
     pkt->size = ff_rac_terminate(c, 0);
     if (s->current_picture->key_frame)
         pkt->flags |= AV_PKT_FLAG_KEY;
@@ -1941,7 +1916,7 @@ static const AVClass snowenc_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-AVCodec ff_snow_encoder = {
+const AVCodec ff_snow_encoder = {
     .name           = "snow",
     .long_name      = NULL_IF_CONFIG_SMALL("Snow"),
     .type           = AVMEDIA_TYPE_VIDEO,

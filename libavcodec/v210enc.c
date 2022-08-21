@@ -101,12 +101,6 @@ static av_cold int encode_init(AVCodecContext *avctx)
         return AVERROR(EINVAL);
     }
 
-#if FF_API_CODED_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    avctx->coded_frame->pict_type = AV_PICTURE_TYPE_I;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-
     ff_v210enc_init(s);
 
     avctx->bits_per_coded_sample = 20;
@@ -157,7 +151,7 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
     return 0;
 }
 
-AVCodec ff_v210_encoder = {
+const AVCodec ff_v210_encoder = {
     .name           = "v210",
     .long_name      = NULL_IF_CONFIG_SMALL("Uncompressed 4:2:2 10-bit"),
     .type           = AVMEDIA_TYPE_VIDEO,

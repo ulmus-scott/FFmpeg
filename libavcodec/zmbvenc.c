@@ -180,12 +180,6 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
     c->curfrm++;
     if(c->curfrm == c->keyint)
         c->curfrm = 0;
-#if FF_API_CODED_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-    avctx->coded_frame->pict_type = keyframe ? AV_PICTURE_TYPE_I : AV_PICTURE_TYPE_P;
-    avctx->coded_frame->key_frame = keyframe;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
 
     palptr = (avctx->pix_fmt == AV_PIX_FMT_PAL8) ? (uint32_t *)p->data[1] : NULL;
     chpal = !keyframe && palptr && memcmp(palptr, c->pal2, 1024);
@@ -294,10 +288,10 @@ FF_ENABLE_DEPRECATION_WARNINGS
         *buf++ = c->fmt; // format
         *buf++ = ZMBV_BLOCK; // block width
         *buf++ = ZMBV_BLOCK; // block height
+        pkt->flags |= AV_PKT_FLAG_KEY;
     }
     memcpy(buf, c->comp_buf, c->zstream.total_out);
 
-    pkt->flags |= AV_PKT_FLAG_KEY*keyframe;
     *got_packet = 1;
 
     return 0;
@@ -428,7 +422,7 @@ static av_cold int encode_init(AVCodecContext *avctx)
     return 0;
 }
 
-AVCodec ff_zmbv_encoder = {
+const AVCodec ff_zmbv_encoder = {
     .name           = "zmbv",
     .long_name      = NULL_IF_CONFIG_SMALL("Zip Motion Blocks Video"),
     .type           = AVMEDIA_TYPE_VIDEO,

@@ -55,7 +55,7 @@ found:
     s = av_mallocz(sizeof(AVCodecParserContext));
     if (!s)
         goto err_out;
-    s->parser = (AVCodecParser*)parser;
+    s->parser = parser;
     s->priv_data = av_mallocz(parser->priv_data_size);
     if (!s->priv_data)
         goto err_out;
@@ -284,18 +284,4 @@ void ff_parse_close(AVCodecParserContext *s)
     ParseContext *pc = s->priv_data;
 
     av_freep(&pc->buffer);
-}
-
-int ff_mpeg4video_split(AVCodecContext *avctx, const uint8_t *buf, int buf_size)
-{
-    uint32_t state = -1;
-    const uint8_t *ptr = buf, *end = buf + buf_size;
-
-    while (ptr < end) {
-        ptr = avpriv_find_start_code(ptr, end, &state);
-        if (state == 0x1B3 || state == 0x1B6)
-            return ptr - 4 - buf;
-    }
-
-    return 0;
 }

@@ -156,9 +156,6 @@ static av_cold int libkvazaar_close(AVCodecContext *avctx)
         ctx->api->config_destroy(ctx->config);
     }
 
-    if (avctx->extradata)
-        av_freep(&avctx->extradata);
-
     return 0;
 }
 
@@ -276,19 +273,8 @@ static int libkvazaar_encode(AVCodecContext *avctx,
             av_log(avctx, AV_LOG_ERROR, "Unknown picture type encountered.\n");
             return AVERROR_EXTERNAL;
         }
-#if FF_API_CODED_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-        avctx->coded_frame->pict_type = pict_type;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
 
         ff_side_data_set_encoder_stats(avpkt, frame_info.qp * FF_QP2LAMBDA, NULL, 0, pict_type);
-
-#if FF_API_CODED_FRAME
-FF_DISABLE_DEPRECATION_WARNINGS
-        avctx->coded_frame->quality = frame_info.qp * FF_QP2LAMBDA;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
 
         *got_packet_ptr = 1;
     }
@@ -325,7 +311,7 @@ static const AVCodecDefault defaults[] = {
     { NULL },
 };
 
-AVCodec ff_libkvazaar_encoder = {
+const AVCodec ff_libkvazaar_encoder = {
     .name             = "libkvazaar",
     .long_name        = NULL_IF_CONFIG_SMALL("libkvazaar H.265 / HEVC"),
     .type             = AVMEDIA_TYPE_VIDEO,

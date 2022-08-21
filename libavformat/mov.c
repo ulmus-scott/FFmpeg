@@ -4656,6 +4656,8 @@ static int mov_read_chap(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     for (i = 0; i < num && !pb->eof_reached; i++)
         c->chapter_tracks[i] = avio_rb32(pb);
 
+    c->nb_chapter_tracks = i;
+
     return 0;
 }
 
@@ -5441,6 +5443,11 @@ static int mov_read_coll(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         return 0;
     }
     avio_skip(pb, 3); /* flags */
+
+    if (sc->coll){
+        av_log(c->fc, AV_LOG_WARNING, "Ignoring duplicate COLL\n");
+        return 0;
+    }
 
     sc->coll = av_content_light_metadata_alloc(&sc->coll_size);
     if (!sc->coll)

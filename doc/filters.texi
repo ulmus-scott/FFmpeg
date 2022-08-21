@@ -12957,18 +12957,29 @@ greyedge=difford=1:minknorm=0:sigma=2
 
 @end itemize
 
-@section guided filter
+@section guided
 Apply guided filter for edge-preserving smoothing, dehazing and so on.
+This filter requires two inputs of same resolution and pixel format.
+The second input serves as the reference.
 
 The filter accepts the following options:
 @table @option
 @item radius
-Set the radius in pixels.
+Set the box radius in pixels.
 Allowed range is 1 to 20. Default is 3.
 
 @item eps
-Set regularization parameter.
-Allowed range is 0 to 1. Default is 0.1.
+Set regularization parameter (with square).
+Allowed range is 0 to 1. Default is 0.01.
+
+@item mode
+Set filter mode. Can be @code{basic} or @code{fast}.
+Default is @code{basic}.
+
+@item sub
+Set subsampling ratio for @code{fast} mode.
+Range is 2 to 64. Default is 4.
+No subsampling occurs in @code{basic} mode.
 
 @item planes
 Set planes to filter. Default is first only.
@@ -12987,8 +12998,8 @@ ffmpeg -i in.png -i in.png -filter_complex guided out.png
 
 @item
 Dehazing, structure-transferring filtering, detail enhancement with guided filter.
-For the generation of guidance image,
-see @url{http://kaiminghe.com/publications/pami12guidedfilter.pdf}.
+For the generation of guidance image, refer to paper "Guided Image Filtering".
+See: @url{http://kaiminghe.com/publications/pami12guidedfilter.pdf}.
 @example
 ffmpeg -i in.png -i guidance.png -filter_complex guided out.png
 @end example
@@ -13996,6 +14007,8 @@ ffmpeg -i input.mov -vf lensfun=make=Canon:model="Canon EOS 100D":lens_model="Ca
 
 Obtain the VMAF (Video Multi-Method Assessment Fusion)
 score between two input videos.
+
+The first input is the encoded video, and the second input is the reference video.
 
 The obtained VMAF score is printed through the logging system.
 
@@ -25285,10 +25298,10 @@ The expression is evaluated through the eval API and can contain the following
 constants:
 
 @table @option
-@item VALUE1
+@item VALUE1, FRAMEVAL
 Float representation of @code{value} from metadata key.
 
-@item VALUE2
+@item VALUE2, USERVAL
 Float representation of @code{value} as supplied by user in @code{value} option.
 @end table
 

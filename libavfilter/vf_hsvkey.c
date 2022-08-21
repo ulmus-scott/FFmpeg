@@ -244,9 +244,7 @@ static av_cold int config_output(AVFilterLink *outlink)
     return 0;
 }
 
-static av_cold int query_formats(AVFilterContext *avctx)
-{
-    static const enum AVPixelFormat pixel_fmts[] = {
+static const enum AVPixelFormat key_pixel_fmts[] = {
         AV_PIX_FMT_YUVA420P,
         AV_PIX_FMT_YUVA422P,
         AV_PIX_FMT_YUVA444P,
@@ -275,12 +273,6 @@ static av_cold int query_formats(AVFilterContext *avctx)
         AV_PIX_FMT_YUVA420P16, AV_PIX_FMT_YUVA422P16, AV_PIX_FMT_YUVA444P16,
         AV_PIX_FMT_NONE
     };
-    const enum AVPixelFormat *pix_fmts;
-
-    pix_fmts = !strcmp(avctx->filter->name, "hsvhold") ? hold_pixel_fmts : pixel_fmts;
-
-    return ff_set_common_formats_from_list(avctx, pix_fmts);
-}
 
 static av_cold int config_input(AVFilterLink *inlink)
 {
@@ -331,9 +323,9 @@ const AVFilter ff_vf_hsvkey = {
     .description   = NULL_IF_CONFIG_SMALL("Turns a certain HSV range into transparency. Operates on YUV colors."),
     .priv_size     = sizeof(HSVKeyContext),
     .priv_class    = &hsvkey_class,
-    .query_formats = query_formats,
     FILTER_INPUTS(hsvkey_inputs),
     FILTER_OUTPUTS(hsvkey_outputs),
+    FILTER_PIXFMTS_ARRAY(key_pixel_fmts),
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .process_command = ff_filter_process_command,
 };
@@ -372,9 +364,9 @@ const AVFilter ff_vf_hsvhold = {
     .description   = NULL_IF_CONFIG_SMALL("Turns a certain HSV range into gray."),
     .priv_size     = sizeof(HSVKeyContext),
     .priv_class    = &hsvhold_class,
-    .query_formats = query_formats,
     FILTER_INPUTS(hsvhold_inputs),
     FILTER_OUTPUTS(hsvhold_outputs),
+    FILTER_PIXFMTS_ARRAY(hold_pixel_fmts),
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .process_command = ff_filter_process_command,
 };

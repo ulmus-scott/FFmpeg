@@ -431,6 +431,12 @@ int ff_add_channel_layout(AVFilterChannelLayouts **l, uint64_t channel_layout)
     return 0;
 }
 
+AVFilterFormats *ff_make_formats_list_singleton(int fmt)
+{
+    int fmts[2] = { fmt, -1 };
+    return ff_make_format_list(fmts);
+}
+
 AVFilterFormats *ff_all_formats(enum AVMediaType type)
 {
     AVFilterFormats *ret = NULL;
@@ -704,12 +710,40 @@ int ff_set_common_formats_from_list(AVFilterContext *ctx, const int *fmts)
 
 int ff_default_query_formats(AVFilterContext *ctx)
 {
+    const AVFilter *const f = ctx->filter;
+    AVFilterFormats *formats;
+    enum AVMediaType type;
     int ret;
-    enum AVMediaType type = ctx->nb_inputs  ? ctx->inputs [0]->type :
-                            ctx->nb_outputs ? ctx->outputs[0]->type :
-                            AVMEDIA_TYPE_VIDEO;
 
-    ret = ff_set_common_formats(ctx, ff_all_formats(type));
+    switch (f->formats_state) {
+    case FF_FILTER_FORMATS_PIXFMT_LIST:
+        type    = AVMEDIA_TYPE_VIDEO;
+        formats = ff_make_format_list(f->formats.pixels_list);
+        break;
+    case FF_FILTER_FORMATS_SAMPLEFMTS_LIST:
+        type    = AVMEDIA_TYPE_AUDIO;
+        formats = ff_make_format_list(f->formats.samples_list);
+        break;
+    case FF_FILTER_FORMATS_SINGLE_PIXFMT:
+        type    = AVMEDIA_TYPE_VIDEO;
+        formats = ff_make_formats_list_singleton(f->formats.pix_fmt);
+        break;
+    case FF_FILTER_FORMATS_SINGLE_SAMPLEFMT:
+        type    = AVMEDIA_TYPE_AUDIO;
+        formats = ff_make_formats_list_singleton(f->formats.sample_fmt);
+        break;
+    default:
+        av_assert2(!"Unreachable");
+    /* Intended fallthrough */
+    case FF_FILTER_FORMATS_PASSTHROUGH:
+    case FF_FILTER_FORMATS_QUERY_FUNC:
+        type    = ctx->nb_inputs  ? ctx->inputs [0]->type :
+                  ctx->nb_outputs ? ctx->outputs[0]->type : AVMEDIA_TYPE_VIDEO;
+        formats = ff_all_formats(type);
+        break;
+    }
+
+    ret = ff_set_common_formats(ctx, formats);
     if (ret < 0)
         return ret;
     if (type == AVMEDIA_TYPE_AUDIO) {

@@ -55,8 +55,6 @@ typedef struct XMedianContext {
     int (*median_frames)(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs);
 } XMedianContext;
 
-static int query_formats(AVFilterContext *ctx)
-{
     static const enum AVPixelFormat pixel_fmts[] = {
         AV_PIX_FMT_GRAY8,
         AV_PIX_FMT_GRAY9,
@@ -86,8 +84,6 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_GBRAP,     AV_PIX_FMT_GBRAP10,    AV_PIX_FMT_GBRAP12,    AV_PIX_FMT_GBRAP16,
         AV_PIX_FMT_NONE
     };
-    return ff_set_common_formats_from_list(ctx, pixel_fmts);
-}
 
 static av_cold int init(AVFilterContext *ctx)
 {
@@ -395,8 +391,8 @@ const AVFilter ff_vf_xmedian = {
     .description   = NULL_IF_CONFIG_SMALL("Pick median pixels from several video inputs."),
     .priv_size     = sizeof(XMedianContext),
     .priv_class    = &xmedian_class,
-    .query_formats = query_formats,
     FILTER_OUTPUTS(outputs),
+    FILTER_PIXFMTS_ARRAY(pixel_fmts),
     .preinit       = xmedian_framesync_preinit,
     .init          = xmedian_init,
     .uninit        = uninit,
@@ -478,9 +474,9 @@ const AVFilter ff_vf_tmedian = {
     .description   = NULL_IF_CONFIG_SMALL("Pick median pixels from successive frames."),
     .priv_size     = sizeof(XMedianContext),
     .priv_class    = &tmedian_class,
-    .query_formats = query_formats,
     FILTER_INPUTS(tmedian_inputs),
     FILTER_OUTPUTS(tmedian_outputs),
+    FILTER_PIXFMTS_ARRAY(pixel_fmts),
     .init          = init,
     .uninit        = uninit,
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL | AVFILTER_FLAG_SLICE_THREADS,

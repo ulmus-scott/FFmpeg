@@ -61,7 +61,10 @@ typedef struct IPlane {
 } IPlane;
 
 typedef struct LUT {
+    /* arr is shifted from base_arr by FFMAX(min_r, 0).
+     * arr != NULL means "lut completely allocated" */
     uint8_t ***arr;
+    uint8_t ***base_arr;
     int min_r;
     int max_r;
     int I;
@@ -262,7 +265,8 @@ static void maxinplace16_fun(uint8_t *aa, const uint8_t *bb, int x)
 
 static int alloc_lut(LUT *Ty, chord_set *SE, int type_size, int mode)
 {
-    const int size = Ty->max_r + 1 - Ty->min_r;
+    const int min = FFMAX(Ty->min_r, 0);
+    const int max = min + (Ty->max_r - Ty->min_r);
     int pre_pad_x = 0;
 
     if (SE->minX < 0)
@@ -270,49 +274,75 @@ static int alloc_lut(LUT *Ty, chord_set *SE, int type_size, int mode)
     Ty->pre_pad_x = pre_pad_x;
     Ty->type_size = type_size;
 
-    Ty->arr = av_calloc(size, sizeof(*Ty->arr));
-    if (!Ty->arr)
+    Ty->base_arr = av_calloc(max + 1, sizeof(*Ty->base_arr));
+    if (!Ty->base_arr)
         return AVERROR(ENOMEM);
-    for (int r = 0; r < Ty->max_r - Ty->min_r + 1; r++) {
-        Ty->arr[r] = av_calloc(Ty->I, sizeof(uint8_t *));
-        if (!Ty->arr[r])
+    for (int r = min; r <= max; r++) {
+        uint8_t **arr = Ty->base_arr[r] = av_calloc(Ty->I, sizeof(uint8_t *));
+        if (!Ty->base_arr[r])
             return AVERROR(ENOMEM);
         for (int i = 0; i < Ty->I; i++) {
-            Ty->arr[r][i] = av_calloc(Ty->X + pre_pad_x, type_size);
-            if (!Ty->arr[r][i])
+            arr[i] = av_calloc(Ty->X + pre_pad_x, type_size);
+            if (!arr[i])
                 return AVERROR(ENOMEM);
             if (mode == ERODE)
-                memset(Ty->arr[r][i], UINT8_MAX, pre_pad_x * type_size);
+                memset(arr[i], UINT8_MAX, pre_pad_x * type_size);
             /* Shifting the X index such that negative indices correspond to
              * the pre-padding.
              */
-            Ty->arr[r][i] = &(Ty->arr[r][i][pre_pad_x * type_size]);
+            arr[i] = &(arr[i][pre_pad_x * type_size]);
         }
     }
 
-    Ty->arr = &(Ty->arr[0 - Ty->min_r]);
+    Ty->arr = &(Ty->base_arr[min - Ty->min_r]);
 
     return 0;
 }
 
 static void free_lut(LUT *table)
 {
-    uint8_t ***rp;
+    const int min = FFMAX(table->min_r, 0);
+    const int max = min + (table->max_r - table->min_r);
 
-    if (!table->arr)
+    if (!table->base_arr)
         return;
 
-    // The R index was shifted, create a pointer to the original array
-    rp = &(table->arr[table->min_r]);
-
-    for (int r = table->min_r; r <= table->max_r; r++) {
+    for (int r = min; r <= max; r++) {
+        if (!table->base_arr[r])
+            break;
         for (int i = 0; i < table->I; i++) {
+            if (!table->base_arr[r][i])
+                break;
             // The X index was also shifted, for padding purposes.
-            av_free(table->arr[r][i] - table->pre_pad_x * table->type_size);
+            av_free(table->base_arr[r][i] - table->pre_pad_x * table->type_size);
         }
-        av_freep(&table->arr[r]);
+        av_freep(&table->base_arr[r]);
     }
-    av_freep(&rp);
+    av_freep(&table->base_arr);
+    table->arr = NULL;
+}
+
+static int alloc_lut_if_necessary(LUT *Ty, IPlane *f, chord_set *SE,
+                                  int y, int num, enum MorphModes mode)
+{
+    if (!Ty->arr || Ty->I != SE->Lnum ||
+        Ty->X != f->w ||
+        SE->minX < 0 && -SE->minX > Ty->pre_pad_x ||
+        Ty->min_r != SE->minY ||
+        Ty->max_r != SE->maxY + num - 1) {
+        int ret;
+
+        free_lut(Ty);
+
+        Ty->I = SE->Lnum;
+        Ty->X = f->w;
+        Ty->min_r = SE->minY;
+        Ty->max_r = SE->maxY + num - 1;
+        ret = alloc_lut(Ty, SE, f->type_size, mode);
+        if (ret < 0)
+            return ret;
+    }
+    return 0;
 }
 
 static void circular_swap(LUT *Ty)
@@ -362,22 +392,9 @@ static void update_min_lut(IPlane *f, LUT *Ty, chord_set *SE, int y, int tid, in
 
 static int compute_min_lut(LUT *Ty, IPlane *f, chord_set *SE, int y, int num)
 {
-    if (Ty->I != SE->Lnum ||
-        Ty->X != f->w ||
-        Ty->min_r != SE->minY ||
-        Ty->max_r != SE->maxY + num - 1) {
-        int ret;
-
-        free_lut(Ty);
-
-        Ty->I = SE->Lnum;
-        Ty->X = f->w;
-        Ty->min_r = SE->minY;
-        Ty->max_r = SE->maxY + num - 1;
-        ret = alloc_lut(Ty, SE, f->type_size, ERODE);
-        if (ret < 0)
-            return ret;
-    }
+    int ret = alloc_lut_if_necessary(Ty, f, SE, y, num, ERODE);
+    if (ret < 0)
+        return ret;
 
     for (int r = Ty->min_r; r <= Ty->max_r; r++)
         compute_min_row(f, Ty, SE, r, y);
@@ -416,22 +433,9 @@ static void update_max_lut(IPlane *f, LUT *Ty, chord_set *SE, int y, int tid, in
 
 static int compute_max_lut(LUT *Ty, IPlane *f, chord_set *SE, int y, int num)
 {
-    if (Ty->I != SE->Lnum ||
-        Ty->X != f->w ||
-        Ty->min_r != SE->minY ||
-        Ty->max_r != SE->maxY + num - 1) {
-        int ret;
-
-        free_lut(Ty);
-
-        Ty->I = SE->Lnum;
-        Ty->X = f->w;
-        Ty->min_r = SE->minY;
-        Ty->max_r = SE->maxY + num - 1;
-        ret = alloc_lut(Ty, SE, f->type_size, DILATE);
-        if (ret < 0)
-            return ret;
-    }
+    int ret = alloc_lut_if_necessary(Ty, f, SE, y, num, DILATE);
+    if (ret < 0)
+        return ret;
 
     for (int r = Ty->min_r; r <= Ty->max_r; r++)
         compute_max_row(f, Ty, SE, r, y);
@@ -932,6 +936,7 @@ copy:
     out->pts = av_rescale_q(s->fs.pts, s->fs.time_base, outlink->time_base);
     return ff_filter_frame(outlink, out);
 fail:
+    av_frame_free(&out);
     av_frame_free(&in);
     return ret;
 }
@@ -1019,9 +1024,9 @@ const AVFilter ff_vf_morpho = {
     .priv_class      = &morpho_class,
     .activate        = activate,
     .uninit          = uninit,
-    .query_formats   = query_formats,
     FILTER_INPUTS(morpho_inputs),
     FILTER_OUTPUTS(morpho_outputs),
+    FILTER_QUERY_FUNC(query_formats),
     .flags           = AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL,
     .process_command = ff_filter_process_command,
 };

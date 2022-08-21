@@ -50,8 +50,6 @@ typedef struct AmplifyContext {
     AVFrame **frames;
 } AmplifyContext;
 
-static int query_formats(AVFilterContext *ctx)
-{
     static const enum AVPixelFormat pixel_fmts[] = {
         AV_PIX_FMT_GRAY8, AV_PIX_FMT_GRAY9,
         AV_PIX_FMT_GRAY10, AV_PIX_FMT_GRAY12, AV_PIX_FMT_GRAY14,
@@ -78,8 +76,6 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_GBRAP,     AV_PIX_FMT_GBRAP10,    AV_PIX_FMT_GBRAP12,    AV_PIX_FMT_GBRAP16,
         AV_PIX_FMT_NONE
     };
-    return ff_set_common_formats_from_list(ctx, pixel_fmts);
-}
 
 static av_cold int init(AVFilterContext *ctx)
 {
@@ -314,9 +310,9 @@ const AVFilter ff_vf_amplify = {
     .description   = NULL_IF_CONFIG_SMALL("Amplify changes between successive video frames."),
     .priv_size     = sizeof(AmplifyContext),
     .priv_class    = &amplify_class,
-    .query_formats = query_formats,
     FILTER_OUTPUTS(outputs),
     FILTER_INPUTS(inputs),
+    FILTER_PIXFMTS_ARRAY(pixel_fmts),
     .init          = init,
     .uninit        = uninit,
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL | AVFILTER_FLAG_SLICE_THREADS,

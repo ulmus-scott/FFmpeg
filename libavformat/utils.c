@@ -4952,37 +4952,10 @@ void av_remove_stream(AVFormatContext *s, int id, int remove_ts) {
     int changes = 0;
 
     for (i=0; i<s->nb_streams; i++) {
-        AVCodecContext *codec_ctx;
         if (s->streams[i]->id != id)
             continue;
 
         av_log(NULL, AV_LOG_DEBUG, "av_remove_stream 0x%x\n", id);
-
-#if FF_API_LAVF_AVCTX
-FF_DISABLE_DEPRECATION_WARNINGS
-        /* close codec context */
-        codec_ctx = s->streams[i]->codec;
-        if (codec_ctx->codec) {
-            avcodec_close(codec_ctx);
-            av_free(codec_ctx);
-        }
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
-#if 0
-        /* make sure format context is not using the codec context */
-        if (&s->streams[i] == s->cur_st) {
-            av_log(NULL, AV_LOG_DEBUG, "av_remove_stream cur_st = NULL\n");
-            s->cur_st = NULL;
-        }
-     /*   else if (s->cur_st > &s->streams[i]) {
-            av_log(NULL, AV_LOG_DEBUG, "av_remove_stream cur_st -= 1\n");
-            s->cur_st -= sizeof(AVFormatContext *);
-        } */
-        else {
-            av_log(NULL, AV_LOG_DEBUG,
-                   "av_remove_stream: no change to cur_st\n");
-        }
-#endif
 
         av_log(NULL, AV_LOG_DEBUG, "av_remove_stream: removing... "
                "s->nb_streams=%d i=%d\n", s->nb_streams, i);

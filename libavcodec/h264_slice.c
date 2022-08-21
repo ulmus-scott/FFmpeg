@@ -28,6 +28,7 @@
 #include "libavutil/avassert.h"
 #include "libavutil/display.h"
 #include "libavutil/film_grain_params.h"
+#include "libavutil/imgutils.h" // for av_image_copy, see https://trac.ffmpeg.org/ticket/9532
 #include "libavutil/pixdesc.h"
 #include "libavutil/stereo3d.h"
 #include "libavutil/timecode.h"

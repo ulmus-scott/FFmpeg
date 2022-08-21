@@ -309,6 +309,7 @@ External library support:
                            if openssl, gnutls or libtls is not used [no]
   --enable-mediacodec      enable Android MediaCodec support [no]
   --enable-mediafoundation enable encoding via MediaFoundation [auto]
+  --disable-metal          disable Apple Metal framework [autodetect]
   --enable-libmysofa       enable libmysofa, needed for sofalizer filter [no]
   --enable-openal          enable OpenAL 1.1 capture support [no]
   --enable-opencl          enable OpenCL processing [no]
@@ -323,7 +324,7 @@ External library support:
   --disable-securetransport disable Secure Transport, needed for TLS support
                            on OSX if openssl and gnutls are not used [autodetect]
   --enable-vapoursynth     enable VapourSynth demuxer [no]
-  --enable-vulkan          enable Vulkan code [no]
+  --disable-vulkan         disable Vulkan code [autodetect]
   --disable-xlib           disable xlib [autodetect]
   --disable-zlib           disable zlib [autodetect]
 
@@ -382,6 +383,8 @@ Toolchain options:
   --dep-cc=DEPCC           use dependency generator DEPCC [$cc_default]
   --nvcc=NVCC              use Nvidia CUDA compiler NVCC or clang [$nvcc_default]
   --ld=LD                  use linker LD [$ld_default]
+  --metalcc=METALCC        use metal compiler METALCC [$metalcc_default]
+  --metallib=METALLIB      use metal linker METALLIB [$metallib_default]
   --pkg-config=PKGCONFIG   use pkg-config tool PKGCONFIG [$pkg_config_default]
   --pkg-config-flags=FLAGS pass additional flags to pkgconf []
   --ranlib=RANLIB          use ranlib RANLIB [$ranlib_default]
@@ -1755,6 +1758,7 @@ EXTERNAL_AUTODETECT_LIBRARY_LIST="
     libxcb_xfixes
     lzma
     mediafoundation
+    metal
     schannel
     sdl2
     securetransport
@@ -1893,6 +1897,7 @@ HWACCEL_AUTODETECT_LIBRARY_LIST="
     vaapi
     vdpau
     videotoolbox
+    vulkan
     v4l2_m2m
     xvmc
 "
@@ -1915,7 +1920,6 @@ HWACCEL_LIBRARY_LIST="
     mmal
     omx
     opencl
-    vulkan
 "
 
 DOCUMENT_LIST="
@@ -2564,6 +2568,8 @@ CMDLINE_SET="
     ln_s
     logfile
     malloc_prefix
+    metalcc
+    metallib
     nm
     optflags
     nvcc
@@ -3300,6 +3306,8 @@ h264_videotoolbox_encoder_deps="pthreads"
 h264_videotoolbox_encoder_select="atsc_a53 videotoolbox_encoder"
 hevc_videotoolbox_encoder_deps="pthreads"
 hevc_videotoolbox_encoder_select="atsc_a53 videotoolbox_encoder"
+prores_videotoolbox_encoder_deps="pthreads"
+prores_videotoolbox_encoder_select="videotoolbox_encoder"
 libaom_av1_decoder_deps="libaom"
 libaom_av1_encoder_deps="libaom"
 libaom_av1_encoder_select="extract_extradata_bsf"
@@ -3744,6 +3752,7 @@ vpp_qsv_filter_select="qsvvpp"
 xfade_opencl_filter_deps="opencl"
 yadif_cuda_filter_deps="ffnvcodec"
 yadif_cuda_filter_deps_any="cuda_nvcc cuda_llvm"
+yadif_videotoolbox_filter_deps="metal corevideo videotoolbox"
 
 # examples
 avio_list_dir_deps="avformat avutil"
@@ -3836,6 +3845,8 @@ host_cc_default="gcc"
 doxygen_default="doxygen"
 install="install"
 ln_s_default="ln -s -f"
+metalcc_default="xcrun -sdk macosx metal"
+metallib_default="xcrun -sdk macosx metallib"
 nm_default="nm -g"
 pkg_config_default=pkg-config
 ranlib_default="ranlib"
@@ -4437,7 +4448,7 @@ if enabled cuda_nvcc; then
 fi
 
 set_default arch cc cxx doxygen pkg_config ranlib strip sysinclude \
-    target_exec x86asmexe
+    target_exec x86asmexe metalcc metallib
 enabled cross_compile || host_cc_default=$cc
 set_default host_cc
 
@@ -6329,6 +6340,7 @@ enabled appkit       && check_apple_framework AppKit
 enabled audiotoolbox && check_apple_framework AudioToolbox
 enabled avfoundation && check_apple_framework AVFoundation
 enabled coreimage    && check_apple_framework CoreImage
+enabled metal        && check_apple_framework Metal
 enabled videotoolbox && check_apple_framework VideoToolbox
 
 check_apple_framework CoreFoundation
@@ -6361,6 +6373,8 @@ enabled videotoolbox && {
     check_func_headers CoreVideo/CVImageBuffer.h kCVImageBufferTransferFunction_ITU_R_2020 "-framework CoreVideo"
     check_func_headers CoreVideo/CVImageBuffer.h kCVImageBufferTransferFunction_SMPTE_ST_428_1 "-framework CoreVideo"
 }
+
+enabled metal && test_cmd $metalcc -v || disable metal
 
 check_struct "sys/time.h sys/resource.h" "struct rusage" ru_maxrss
 
@@ -6914,7 +6928,7 @@ enabled crystalhd && check_lib crystalhd "stdint.h libcrystalhd/libcrystalhd_if.
 
 if enabled vulkan; then
     check_pkg_config_header_only vulkan "vulkan >= 1.2.189" "vulkan/vulkan.h" "defined VK_VERSION_1_2" ||
-        require_cpp_condition vulkan "vulkan/vulkan.h" "defined VK_VERSION_1_2"
+        check_cpp_condition vulkan "vulkan/vulkan.h" "defined(VK_VERSION_1_3) || (defined(VK_VERSION_1_2) && VK_HEADER_VERSION >= 189)"
 fi
 
 if enabled x86; then
@@ -7629,6 +7643,8 @@ ARFLAGS=$arflags
 AR_O=$ar_o
 AR_CMD=$ar
 NM_CMD=$nm
+METALCC=$metalcc
+METALLIB=$metallib
 RANLIB=$ranlib
 STRIP=$strip
 STRIPTYPE=$striptype
@@ -7638,7 +7654,7 @@ LN_S=$ln_s
 CPPFLAGS=$CPPFLAGS
 CFLAGS=$CFLAGS
 CXXFLAGS=$CXXFLAGS
-OBJCFLAGS=$OBJCFLAGS
+OBJCCFLAGS=$OBJCFLAGS
 ASFLAGS=$ASFLAGS
 NVCCFLAGS=$nvccflags
 AS_C=$AS_C
@@ -7689,6 +7705,8 @@ ASDEP_FLAGS=$ASDEP_FLAGS
 X86ASMDEP=$X86ASMDEP
 X86ASMDEP_FLAGS=$X86ASMDEP_FLAGS
 CC_DEPFLAGS=$CC_DEPFLAGS
+CXX_DEPFLAGS=$CXX_DEPFLAGS
+OBJCC_DEPFLAGS=$OBJC_DEPFLAGS
 AS_DEPFLAGS=$AS_DEPFLAGS
 X86ASM_DEPFLAGS=$X86ASM_DEPFLAGS
 HOSTCC=$host_cc

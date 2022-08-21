@@ -913,6 +913,16 @@ Cut frequencies above detection threshold.
 Boost frequencies bellow detection threshold.
 @end table
 Default mode is @samp{cut}.
+
+@item tftype
+Set the type of target filter, can be one of the following:
+
+@table @samp
+@item bell
+@item lowshelf
+@item highshelf
+@end table
+Default type is @samp{bell}.
 @end table
 
 @subsection Commands
@@ -12332,12 +12342,13 @@ Set amount of denoising. By default all detected noise is reduced.
 Default value is 1. Allowed range is from 0 to 1.
 
 @item block
-Set size of block, Default is 4, can be 3, 4, 5 or 6.
-Actual size of block in pixels is 2 to power of @var{block}, so by default
-block size in pixels is 2^4 which is 16.
+Set size of block in pixels, Default is 32, can be 8 to 256.
 
 @item overlap
 Set block overlap. Default is 0.5. Allowed range is from 0.2 to 0.8.
+
+@item method
+Set denoising method. Default is @code{wiener}, can also be @code{hard}.
 
 @item prev
 Set number of previous frames to use for denoising. By default is set to 0.
@@ -16626,6 +16637,29 @@ with the reference file @file{ref.mpg}.
 @example
 ffmpeg -i main.mpg -i ref.mpg -lavfi msad -f null -
 @end example
+
+@section multiply
+Multiply first video stream pixels values with second video stream pixels values.
+
+The filter accepts the following options:
+
+@table @option
+@item scale
+Set the scale applied to second video stream. By default is @code{1}.
+Allowed range is from @code{0} to @code{9}.
+
+@item offset
+Set the offset applied to second video stream. By default is @code{0.5}.
+Allowed range is from @code{-1} to @code{1}.
+
+@item planes
+Specify planes from input video stream that will be processed.
+By default all planes are processed.
+@end table
+
+@subsection Commands
+
+This filter supports same @ref{commands} as options.
 
 @section negate
 
@@ -28467,6 +28501,9 @@ The filter accepts the following options:
 Specify size of video. For the syntax of this option, check the
 @ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
 Default is @code{1024x512}.
+
+@item rate, r
+Set video rate. Default is @code{25}.
 
 @item mode
 Set display mode.

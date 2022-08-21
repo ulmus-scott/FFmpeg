@@ -25,6 +25,7 @@
 
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
+#include "libavutil/bprint.h"
 #include "libavutil/dict.h"
 #include "libavutil/internal.h"
 #include "libavutil/mathematics.h"
@@ -35,6 +36,7 @@
 #include "libavutil/time.h"
 #include "libavutil/timestamp.h"
 
+#include "libavcodec/bsf.h"
 #include "libavcodec/bytestream.h"
 #include "libavcodec/internal.h"
 #include "libavcodec/packet_internal.h"

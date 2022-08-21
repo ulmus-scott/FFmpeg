@@ -488,6 +488,7 @@ Developer options (useful when working on FFmpeg itself):
   --ignore-tests=TESTS     comma-separated list (without "fate-" prefix
                            in the name) of tests whose result is ignored
   --enable-linux-perf      enable Linux Performance Monitor API
+  --enable-macos-kperf     enable macOS kperf (private) API
   --disable-large-tests    disable tests that use a large amount of memory
   --disable-ptx-compression don't compress CUDA PTX code even when possible
 
@@ -1977,6 +1978,7 @@ CONFIG_LIST="
     fontconfig
     large_tests
     linux_perf
+    macos_kperf
     memory_poisoning
     neon_clobber_test
     ossfuzz
@@ -3541,8 +3543,6 @@ libzmq_protocol_deps="libzmq"
 libzmq_protocol_select="network"
 
 # filters
-afftdn_filter_deps="avcodec"
-afftdn_filter_select="fft"
 afftfilt_filter_deps="avcodec"
 afftfilt_filter_select="fft"
 afir_filter_deps="avcodec"
@@ -3607,8 +3607,6 @@ freezedetect_filter_select="scene_sad"
 frei0r_filter_deps="frei0r libdl"
 frei0r_src_filter_deps="frei0r libdl"
 fspp_filter_deps="gpl"
-headphone_filter_deps="avcodec"
-headphone_filter_select="fft"
 histeq_filter_deps="gpl"
 hqdn3d_filter_deps="gpl"
 interlace_filter_deps="gpl"
@@ -3655,24 +3653,18 @@ scale_qsv_filter_deps="libmfx"
 scdet_filter_select="scene_sad"
 select_filter_select="scene_sad"
 sharpness_vaapi_filter_deps="vaapi"
-showcqt_filter_deps="avcodec avformat swscale"
+showcqt_filter_deps="avformat swscale"
 showcqt_filter_suggest="libfontconfig libfreetype"
-showcqt_filter_select="fft"
 showfreqs_filter_deps="avcodec"
 showfreqs_filter_select="fft"
 showspatial_filter_deps="avcodec"
 showspatial_filter_select="fft"
-showspectrum_filter_deps="avcodec"
-showspectrum_filter_select="fft"
-showspectrumpic_filter_deps="avcodec"
-showspectrumpic_filter_select="fft"
 signature_filter_deps="gpl avcodec avformat"
 sinc_filter_deps="avcodec"
 sinc_filter_select="rdft"
 smartblur_filter_deps="gpl swscale"
 sobel_opencl_filter_deps="opencl"
-sofalizer_filter_deps="libmysofa avcodec"
-sofalizer_filter_select="fft"
+sofalizer_filter_deps="libmysofa"
 spectrumsynth_filter_deps="avcodec"
 spectrumsynth_filter_select="fft"
 spp_filter_deps="gpl avcodec"
@@ -7277,7 +7269,6 @@ done
 enabled zlib && add_cppflags -DZLIB_CONST
 
 # conditional library dependencies, in any order
-enabled afftdn_filter       && prepend avfilter_deps "avcodec"
 enabled afftfilt_filter     && prepend avfilter_deps "avcodec"
 enabled afir_filter         && prepend avfilter_deps "avcodec"
 enabled amovie_filter       && prepend avfilter_deps "avformat avcodec"
@@ -7300,10 +7291,8 @@ enabled removelogo_filter   && prepend avfilter_deps "avformat avcodec swscale"
 enabled sab_filter          && prepend avfilter_deps "swscale"
 enabled scale_filter    && prepend avfilter_deps "swscale"
 enabled scale2ref_filter    && prepend avfilter_deps "swscale"
-enabled sofalizer_filter    && prepend avfilter_deps "avcodec"
-enabled showcqt_filter      && prepend avfilter_deps "avformat avcodec swscale"
+enabled showcqt_filter      && prepend avfilter_deps "avformat swscale"
 enabled showfreqs_filter    && prepend avfilter_deps "avcodec"
-enabled showspectrum_filter && prepend avfilter_deps "avcodec"
 enabled signature_filter    && prepend avfilter_deps "avcodec avformat"
 enabled smartblur_filter    && prepend avfilter_deps "swscale"
 enabled spectrumsynth_filter && prepend avfilter_deps "avcodec"

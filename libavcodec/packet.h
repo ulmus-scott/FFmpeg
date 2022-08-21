@@ -387,16 +387,6 @@ typedef struct AVPacket {
     int64_t duration;
 
     int64_t pos;                            ///< byte position in stream, -1 if unknown
-
-#if FF_API_CONVERGENCE_DURATION
-    /**
-     * @deprecated Same as the duration field, but as int64_t. This was required
-     * for Matroska subtitles, whose duration values could overflow when the
-     * duration field was still an int.
-     */
-    attribute_deprecated
-    int64_t convergence_duration;
-#endif
 } AVPacket;
 
 #if FF_API_INIT_PACKET
@@ -529,45 +519,6 @@ int av_grow_packet(AVPacket *pkt, int grow_by);
  */
 int av_packet_from_data(AVPacket *pkt, uint8_t *data, int size);
 
-#if FF_API_AVPACKET_OLD_API
-/**
- * @warning This is a hack - the packet memory allocation stuff is broken. The
- * packet is allocated if it was not really allocated.
- *
- * @deprecated Use av_packet_ref or av_packet_make_refcounted
- */
-attribute_deprecated
-int av_dup_packet(AVPacket *pkt);
-/**
- * Copy packet, including contents
- *
- * @return 0 on success, negative AVERROR on fail
- *
- * @deprecated Use av_packet_ref
- */
-attribute_deprecated
-int av_copy_packet(AVPacket *dst, const AVPacket *src);
-
-/**
- * Copy packet side data
- *
- * @return 0 on success, negative AVERROR on fail
- *
- * @deprecated Use av_packet_copy_props
- */
-attribute_deprecated
-int av_copy_packet_side_data(AVPacket *dst, const AVPacket *src);
-
-/**
- * Free a packet.
- *
- * @deprecated Use av_packet_unref
- *
- * @param pkt packet to free
- */
-attribute_deprecated
-void av_free_packet(AVPacket *pkt);
-#endif
 /**
  * Allocate new information of a packet.
  *
@@ -628,14 +579,6 @@ uint8_t* av_packet_get_side_data(const AVPacket *pkt, enum AVPacketSideDataType 
                                  int *size);
 #else
                                  size_t *size);
-#endif
-
-#if FF_API_MERGE_SD_API
-attribute_deprecated
-int av_packet_merge_side_data(AVPacket *pkt);
-
-attribute_deprecated
-int av_packet_split_side_data(AVPacket *pkt);
 #endif
 
 const char *av_packet_side_data_name(enum AVPacketSideDataType type);

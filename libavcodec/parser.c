@@ -67,11 +67,6 @@ found:
             goto err_out;
     }
     s->key_frame            = -1;
-#if FF_API_CONVERGENCE_DURATION
-FF_DISABLE_DEPRECATION_WARNINGS
-    s->convergence_duration = 0;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
     s->dts_sync_point       = INT_MIN;
     s->dts_ref_dts_delta    = INT_MIN;
     s->pts_dts_delta        = INT_MIN;
@@ -189,42 +184,6 @@ int av_parser_parse2(AVCodecParserContext *s, AVCodecContext *avctx,
     return index;
 }
 
-#if FF_API_PARSER_CHANGE
-int av_parser_change(AVCodecParserContext *s, AVCodecContext *avctx,
-                     uint8_t **poutbuf, int *poutbuf_size,
-                     const uint8_t *buf, int buf_size, int keyframe)
-{
-    if (s && s->parser->split) {
-        if (avctx->flags  & AV_CODEC_FLAG_GLOBAL_HEADER ||
-            avctx->flags2 & AV_CODEC_FLAG2_LOCAL_HEADER) {
-            int i = s->parser->split(avctx, buf, buf_size);
-            buf      += i;
-            buf_size -= i;
-        }
-    }
-
-    /* cast to avoid warning about discarding qualifiers */
-    *poutbuf      = (uint8_t *) buf;
-    *poutbuf_size = buf_size;
-    if (avctx->extradata) {
-        if (keyframe && (avctx->flags2 & AV_CODEC_FLAG2_LOCAL_HEADER)) {
-            int size = buf_size + avctx->extradata_size;
-
-            *poutbuf_size = size;
-            *poutbuf      = av_malloc(size + AV_INPUT_BUFFER_PADDING_SIZE);
-            if (!*poutbuf)
-                return AVERROR(ENOMEM);
-
-            memcpy(*poutbuf, avctx->extradata, avctx->extradata_size);
-            memcpy(*poutbuf + avctx->extradata_size, buf,
-                   buf_size + AV_INPUT_BUFFER_PADDING_SIZE);
-            return 1;
-        }
-    }
-
-    return 0;
-}
-#endif
 void av_parser_close(AVCodecParserContext *s)
 {
     if (s) {

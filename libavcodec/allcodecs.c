@@ -27,7 +27,6 @@
 #include "config.h"
 #include "libavutil/thread.h"
 #include "avcodec.h"
-#include "version.h"
 
 extern AVCodec ff_a64multi_encoder;
 extern AVCodec ff_a64multi5_encoder;
@@ -645,6 +644,7 @@ extern AVCodec ff_adpcm_ima_ssi_encoder;
 extern AVCodec ff_adpcm_ima_smjpeg_decoder;
 extern AVCodec ff_adpcm_ima_wav_encoder;
 extern AVCodec ff_adpcm_ima_wav_decoder;
+extern AVCodec ff_adpcm_ima_ws_encoder;
 extern AVCodec ff_adpcm_ima_ws_decoder;
 extern AVCodec ff_adpcm_ms_encoder;
 extern AVCodec ff_adpcm_ms_decoder;
@@ -796,11 +796,6 @@ extern AVCodec ff_h264_qsv_encoder;
 extern AVCodec ff_h264_v4l2m2m_encoder;
 extern AVCodec ff_h264_vaapi_encoder;
 extern AVCodec ff_h264_videotoolbox_encoder;
-#if FF_API_NVENC_OLD_NAME
-extern AVCodec ff_nvenc_encoder;
-extern AVCodec ff_nvenc_h264_encoder;
-extern AVCodec ff_nvenc_hevc_encoder;
-#endif
 extern AVCodec ff_hevc_amf_encoder;
 extern AVCodec ff_hevc_cuvid_decoder;
 extern AVCodec ff_hevc_mediacodec_decoder;
@@ -868,45 +863,6 @@ const AVCodec *av_codec_iterate(void **opaque)
 
     return c;
 }
-
-#if FF_API_NEXT
-FF_DISABLE_DEPRECATION_WARNINGS
-static AVOnce av_codec_next_init = AV_ONCE_INIT;
-
-static void av_codec_init_next(void)
-{
-    AVCodec *prev = NULL, *p;
-    void *i = 0;
-    while ((p = (AVCodec*)av_codec_iterate(&i))) {
-        if (prev)
-            prev->next = p;
-        prev = p;
-    }
-}
-
-
-
-av_cold void avcodec_register(AVCodec *codec)
-{
-    ff_thread_once(&av_codec_next_init, av_codec_init_next);
-}
-
-AVCodec *av_codec_next(const AVCodec *c)
-{
-    ff_thread_once(&av_codec_next_init, av_codec_init_next);
-
-    if (c)
-        return c->next;
-    else
-        return (AVCodec*)codec_list[0];
-}
-
-void avcodec_register_all(void)
-{
-    ff_thread_once(&av_codec_next_init, av_codec_init_next);
-}
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
 
 static enum AVCodecID remap_deprecated_codec_id(enum AVCodecID id)
 {

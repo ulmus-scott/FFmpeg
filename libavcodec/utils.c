@@ -429,24 +429,6 @@ enum AVPixelFormat avpriv_find_pix_fmt(const PixelFormatTag *tags,
     return AV_PIX_FMT_NONE;
 }
 
-#if FF_API_CODEC_GET_SET
-MAKE_ACCESSORS(AVCodecContext, codec, AVRational, pkt_timebase)
-MAKE_ACCESSORS(AVCodecContext, codec, const AVCodecDescriptor *, codec_descriptor)
-MAKE_ACCESSORS(AVCodecContext, codec, int, lowres)
-MAKE_ACCESSORS(AVCodecContext, codec, int, seek_preroll)
-MAKE_ACCESSORS(AVCodecContext, codec, uint16_t*, chroma_intra_matrix)
-
-unsigned av_codec_get_codec_properties(const AVCodecContext *codec)
-{
-    return codec->properties;
-}
-
-int av_codec_get_max_lowres(const AVCodec *codec)
-{
-    return codec->max_lowres;
-}
-#endif
-
 int avpriv_codec_get_cap_skip_frame_fill_param(const AVCodec *codec){
     return !!(codec->caps_internal & FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM);
 }
@@ -470,28 +452,6 @@ const char *avcodec_get_name(enum AVCodecID id)
         return codec->name;
     return "unknown_codec";
 }
-
-#if FF_API_TAG_STRING
-size_t av_get_codec_tag_string(char *buf, size_t buf_size, unsigned int codec_tag)
-{
-    int i, len, ret = 0;
-
-#define TAG_PRINT(x)                                              \
-    (((x) >= '0' && (x) <= '9') ||                                \
-     ((x) >= 'a' && (x) <= 'z') || ((x) >= 'A' && (x) <= 'Z') ||  \
-     ((x) == '.' || (x) == ' ' || (x) == '-' || (x) == '_'))
-
-    for (i = 0; i < 4; i++) {
-        len = snprintf(buf, buf_size,
-                       TAG_PRINT(codec_tag & 0xFF) ? "%c" : "[%d]", codec_tag & 0xFF);
-        buf        += len;
-        buf_size    = buf_size > len ? buf_size - len : 0;
-        ret        += len;
-        codec_tag >>= 8;
-    }
-    return ret;
-}
-#endif
 
 const char *av_get_profile_name(const AVCodec *codec, int profile)
 {
@@ -884,17 +844,6 @@ const AVCodecHWConfig *avcodec_get_hw_config(const AVCodec *codec, int index)
             return NULL;
     return &codec->hw_configs[index]->public;
 }
-
-#if FF_API_USER_VISIBLE_AVHWACCEL
-AVHWAccel *av_hwaccel_next(const AVHWAccel *hwaccel)
-{
-    return NULL;
-}
-
-void av_register_hwaccel(AVHWAccel *hwaccel)
-{
-}
-#endif
 
 unsigned int avpriv_toupper4(unsigned int x)
 {

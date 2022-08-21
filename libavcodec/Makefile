@@ -19,7 +19,6 @@ HEADERS = ac3_parser.h                                                  \
           mediacodec.h                                                  \
           packet.h                                                      \
           qsv.h                                                         \
-          vaapi.h                                                       \
           vdpau.h                                                       \
           version.h                                                     \
           videotoolbox.h                                                \
@@ -32,9 +31,7 @@ OBJS = ac3_parser.o                                                     \
        avcodec.o                                                        \
        avdct.o                                                          \
        avpacket.o                                                       \
-       avpicture.o                                                      \
        bitstream.o                                                      \
-       bitstream_filter.o                                               \
        bitstream_filters.o                                              \
        bsf.o                                                            \
        codec_desc.o                                                     \
@@ -375,8 +372,6 @@ OBJS-$(CONFIG_H264_MEDIACODEC_DECODER) += mediacodecdec.o
 OBJS-$(CONFIG_H264_MF_ENCODER)         += mfenc.o mf_utils.o
 OBJS-$(CONFIG_H264_MMAL_DECODER)       += mmaldec.o
 OBJS-$(CONFIG_H264_NVENC_ENCODER)      += nvenc_h264.o
-OBJS-$(CONFIG_NVENC_ENCODER)           += nvenc_h264.o
-OBJS-$(CONFIG_NVENC_H264_ENCODER)      += nvenc_h264.o
 OBJS-$(CONFIG_H264_OMX_ENCODER)        += omx.o
 OBJS-$(CONFIG_H264_QSV_DECODER)        += qsvdec.o
 OBJS-$(CONFIG_H264_QSV_ENCODER)        += qsvenc_h264.o
@@ -397,7 +392,6 @@ OBJS-$(CONFIG_HEVC_CUVID_DECODER)      += cuviddec.o
 OBJS-$(CONFIG_HEVC_MEDIACODEC_DECODER) += mediacodecdec.o
 OBJS-$(CONFIG_HEVC_MF_ENCODER)         += mfenc.o mf_utils.o
 OBJS-$(CONFIG_HEVC_NVENC_ENCODER)      += nvenc_hevc.o
-OBJS-$(CONFIG_NVENC_HEVC_ENCODER)      += nvenc_hevc.o
 OBJS-$(CONFIG_HEVC_QSV_DECODER)        += qsvdec.o
 OBJS-$(CONFIG_HEVC_QSV_ENCODER)        += qsvenc_hevc.o hevc_ps_enc.o       \
                                           hevc_data.o
@@ -898,6 +892,7 @@ OBJS-$(CONFIG_ADPCM_IMA_SMJPEG_DECODER)   += adpcm.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_IMA_WAV_DECODER)      += adpcm.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_IMA_WAV_ENCODER)      += adpcmenc.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_IMA_WS_DECODER)       += adpcm.o adpcm_data.o
+OBJS-$(CONFIG_ADPCM_IMA_WS_ENCODER)       += adpcmenc.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_MS_DECODER)           += adpcm.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_MS_ENCODER)           += adpcmenc.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_MTAF_DECODER)         += adpcm.o adpcm_data.o
@@ -979,9 +974,6 @@ OBJS-$(CONFIG_VP8_QSV_HWACCEL)            += qsvdec.o
 OBJS-$(CONFIG_ISO_MEDIA)               += mpeg4audio.o mpegaudiodata.o
 
 OBJS-$(CONFIG_ADTS_MUXER)              += mpeg4audio.o
-OBJS-$(CONFIG_CODEC2_DEMUXER)          += codec2utils.o
-OBJS-$(CONFIG_CODEC2_MUXER)            += codec2utils.o
-OBJS-$(CONFIG_CODEC2RAW_DEMUXER)       += codec2utils.o
 OBJS-$(CONFIG_DNXHD_DEMUXER)           += dnxhddata.o
 OBJS-$(CONFIG_FITS_DEMUXER)            += fits.o
 OBJS-$(CONFIG_LATM_MUXER)              += mpeg4audio.o
@@ -1024,8 +1016,8 @@ OBJS-$(CONFIG_LIBAOM_AV1_DECODER)         += libaomdec.o
 OBJS-$(CONFIG_LIBAOM_AV1_ENCODER)         += libaomenc.o
 OBJS-$(CONFIG_LIBARIBB24_DECODER)         += libaribb24.o ass.o
 OBJS-$(CONFIG_LIBCELT_DECODER)            += libcelt_dec.o
-OBJS-$(CONFIG_LIBCODEC2_DECODER)          += libcodec2.o codec2utils.o
-OBJS-$(CONFIG_LIBCODEC2_ENCODER)          += libcodec2.o codec2utils.o
+OBJS-$(CONFIG_LIBCODEC2_DECODER)          += libcodec2.o
+OBJS-$(CONFIG_LIBCODEC2_ENCODER)          += libcodec2.o
 OBJS-$(CONFIG_LIBDAV1D_DECODER)           += libdav1d.o
 OBJS-$(CONFIG_LIBDAVS2_DECODER)           += libdavs2.o
 OBJS-$(CONFIG_LIBFDK_AAC_DECODER)         += libfdk-aacdec.o
@@ -1217,7 +1209,6 @@ TESTPROGS = avpacket                                                    \
             celp_math                                                   \
             codec_desc                                                  \
             htmlsubtitles                                               \
-            imgconvert                                                  \
             jpeg2000dwt                                                 \
             mathops                                                    \
             utils                                                       \

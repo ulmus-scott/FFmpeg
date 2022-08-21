@@ -111,6 +111,8 @@ static av_cold int adpcm_decode_init(AVCodecContext * avctx)
     unsigned int min_channels = 1;
     unsigned int max_channels = 2;
 
+    adpcm_flush(avctx);
+
     switch(avctx->codec->id) {
     case AV_CODEC_ID_ADPCM_IMA_AMV:
         max_channels = 1;
@@ -201,8 +203,6 @@ static av_cold int adpcm_decode_init(AVCodecContext * avctx)
     default:
         avctx->sample_fmt = AV_SAMPLE_FMT_S16;
     }
-
-    adpcm_flush(avctx);
     return 0;
 }
 
@@ -1400,16 +1400,16 @@ static int adpcm_decode_frame(AVCodecContext *avctx, void *data,
 
                 for (n = nb_samples / 2; n > 0; n--) {
                     int v = bytestream2_get_byteu(&gb);
-                    *smp++ = adpcm_ima_expand_nibble(&c->status[channel], v >> 4  , 3);
                     *smp++ = adpcm_ima_expand_nibble(&c->status[channel], v & 0x0F, 3);
+                    *smp++ = adpcm_ima_expand_nibble(&c->status[channel], v >> 4  , 3);
                 }
             }
         } else {
             for (n = nb_samples / 2; n > 0; n--) {
                 for (channel = 0; channel < avctx->channels; channel++) {
                     int v = bytestream2_get_byteu(&gb);
-                    *samples++  = adpcm_ima_expand_nibble(&c->status[channel], v >> 4  , 3);
-                    samples[st] = adpcm_ima_expand_nibble(&c->status[channel], v & 0x0F, 3);
+                    *samples++  = adpcm_ima_expand_nibble(&c->status[channel], v & 0x0F, 3);
+                    samples[st] = adpcm_ima_expand_nibble(&c->status[channel], v >> 4  , 3);
                 }
                 samples += avctx->channels;
             }

@@ -476,8 +476,6 @@ typedef struct MpegEncContext {
     int     tmp_scte_cc_len;
 
     uint8_t *ptr_lastgob;
-    int swap_uv;             //vcr2 codec is an MPEG-2 variant with U and V swapped
-    int pack_pblocks;        //xvmc needs to keep blocks without gaps.
     int16_t (*pblocks[12])[64];
 
     int16_t (*block)[64]; ///< points to one of the following blocks
@@ -598,7 +596,7 @@ void ff_mpv_reconstruct_mb(MpegEncContext *s, int16_t block[12][64]);
 
 void ff_clean_intra_table_entries(MpegEncContext *s);
 
-int ff_update_duplicate_context(MpegEncContext *dst, MpegEncContext *src);
+int ff_update_duplicate_context(MpegEncContext *dst, const MpegEncContext *src);
 void ff_set_qscale(MpegEncContext * s, int qscale);
 
 void ff_mpv_idct_init(MpegEncContext *s);

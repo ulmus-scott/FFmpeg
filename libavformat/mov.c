@@ -2443,6 +2443,8 @@ static int mov_finalize_stsd_codec(MOVContext *c, AVIOContext *pb,
         sti->need_parsing = AVSTREAM_PARSE_FULL;
         break;
     case AV_CODEC_ID_AV1:
+        /* field_order detection of H264 requires parsing */
+    case AV_CODEC_ID_H264:
         sti->need_parsing = AVSTREAM_PARSE_HEADERS;
         break;
     default:
@@ -2600,11 +2602,11 @@ static int mov_read_stsd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     }
 
     /* Prepare space for hosting multiple extradata. */
-    sc->extradata = av_mallocz_array(entries, sizeof(*sc->extradata));
+    sc->extradata = av_calloc(entries, sizeof(*sc->extradata));
     if (!sc->extradata)
         return AVERROR(ENOMEM);
 
-    sc->extradata_size = av_mallocz_array(entries, sizeof(*sc->extradata_size));
+    sc->extradata_size = av_calloc(entries, sizeof(*sc->extradata_size));
     if (!sc->extradata_size) {
         ret = AVERROR(ENOMEM);
         goto fail;
@@ -6009,7 +6011,7 @@ static int mov_read_sample_encryption_info(MOVContext *c, AVIOContext *pb, MOVSt
     if (use_subsamples) {
         subsample_count = avio_rb16(pb);
         av_free((*sample)->subsamples);
-        (*sample)->subsamples = av_mallocz_array(subsample_count, sizeof(*subsamples));
+        (*sample)->subsamples = av_calloc(subsample_count, sizeof(*subsamples));
         if (!(*sample)->subsamples) {
             av_encryption_info_free(*sample);
             *sample = NULL;

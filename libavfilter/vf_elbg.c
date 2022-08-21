@@ -33,8 +33,9 @@
 #include "internal.h"
 #include "video.h"
 
-typedef struct ELBGContext {
+typedef struct ELBGFilterContext {
     const AVClass *class;
+    struct ELBGContext *ctx;
     AVLFG lfg;
     int64_t lfg_seed;
     int max_steps_nb;
@@ -46,9 +47,9 @@ typedef struct ELBGContext {
     const AVPixFmtDescriptor *pix_desc;
     uint8_t rgba_map[4];
     int pal8;
-} ELBGContext;
+} ELBGFilterContext;
 
-#define OFFSET(x) offsetof(ELBGContext, x)
+#define OFFSET(x) offsetof(ELBGFilterContext, x)
 #define FLAGS AV_OPT_FLAG_VIDEO_PARAM|AV_OPT_FLAG_FILTERING_PARAM
 
 static const AVOption elbg_options[] = {
@@ -66,7 +67,7 @@ AVFILTER_DEFINE_CLASS(elbg);
 
 static av_cold int init(AVFilterContext *ctx)
 {
-    ELBGContext *elbg = ctx->priv;
+    ELBGFilterContext *const elbg = ctx->priv;
 
     if (elbg->pal8 && elbg->codebook_length > 256) {
         av_log(ctx, AV_LOG_ERROR, "pal8 output allows max 256 codebook length.\n");
@@ -82,7 +83,7 @@ static av_cold int init(AVFilterContext *ctx)
 
 static int query_formats(AVFilterContext *ctx)
 {
-    ELBGContext *elbg = ctx->priv;
+    ELBGFilterContext *const elbg = ctx->priv;
     int ret;
 
     static const enum AVPixelFormat pix_fmts[] = {
@@ -109,7 +110,7 @@ static int query_formats(AVFilterContext *ctx)
 static int config_input(AVFilterLink *inlink)
 {
     AVFilterContext *ctx = inlink->dst;
-    ELBGContext *elbg = ctx->priv;
+    ELBGFilterContext *const elbg = ctx->priv;
 
     elbg->pix_desc = av_pix_fmt_desc_get(inlink->format);
     elbg->codeword_length = inlink->w * inlink->h;
@@ -140,7 +141,7 @@ static int config_input(AVFilterLink *inlink)
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
 {
-    ELBGContext *elbg = inlink->dst->priv;
+    ELBGFilterContext *const elbg = inlink->dst->priv;
     int i, j, k;
     uint8_t *p, *p0;
 
@@ -163,10 +164,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
     }
 
     /* compute the codebook */
-    avpriv_init_elbg(elbg->codeword, NB_COMPONENTS, elbg->codeword_length,
-                     elbg->codebook, elbg->codebook_length, elbg->max_steps_nb,
-                     elbg->codeword_closest_codebook_idxs, &elbg->lfg);
-    avpriv_do_elbg(elbg->codeword, NB_COMPONENTS, elbg->codeword_length,
+    avpriv_elbg_do(&elbg->ctx, elbg->codeword, NB_COMPONENTS, elbg->codeword_length,
                    elbg->codebook, elbg->codebook_length, elbg->max_steps_nb,
                    elbg->codeword_closest_codebook_idxs, &elbg->lfg);
 
@@ -224,7 +222,9 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
 
 static av_cold void uninit(AVFilterContext *ctx)
 {
-    ELBGContext *elbg = ctx->priv;
+    ELBGFilterContext *const elbg = ctx->priv;
+
+    avpriv_elbg_free(&elbg->ctx);
 
     av_freep(&elbg->codebook);
     av_freep(&elbg->codeword);
@@ -251,7 +251,7 @@ static const AVFilterPad elbg_outputs[] = {
 const AVFilter ff_vf_elbg = {
     .name          = "elbg",
     .description   = NULL_IF_CONFIG_SMALL("Apply posterize effect, using the ELBG algorithm."),
-    .priv_size     = sizeof(ELBGContext),
+    .priv_size     = sizeof(ELBGFilterContext),
     .priv_class    = &elbg_class,
     .query_formats = query_formats,
     .init          = init,

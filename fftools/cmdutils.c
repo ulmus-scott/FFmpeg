@@ -689,7 +689,7 @@ static void init_parse_context(OptionParseContext *octx,
     memset(octx, 0, sizeof(*octx));
 
     octx->nb_groups = nb_groups;
-    octx->groups    = av_mallocz_array(octx->nb_groups, sizeof(*octx->groups));
+    octx->groups    = av_calloc(octx->nb_groups, sizeof(*octx->groups));
     if (!octx->groups)
         exit_program(1);
 
@@ -1399,8 +1399,6 @@ static void print_codec(const AVCodec *c)
         printf("horizband ");
     if (c->capabilities & AV_CODEC_CAP_DR1)
         printf("dr1 ");
-    if (c->capabilities & AV_CODEC_CAP_TRUNCATED)
-        printf("trunc ");
     if (c->capabilities & AV_CODEC_CAP_DELAY)
         printf("delay ");
     if (c->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME)
@@ -2170,7 +2168,7 @@ AVDictionary **setup_find_stream_info_opts(AVFormatContext *s,
 
     if (!s->nb_streams)
         return NULL;
-    opts = av_mallocz_array(s->nb_streams, sizeof(*opts));
+    opts = av_calloc(s->nb_streams, sizeof(*opts));
     if (!opts) {
         av_log(NULL, AV_LOG_ERROR,
                "Could not alloc memory for stream options.\n");

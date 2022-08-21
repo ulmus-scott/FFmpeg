@@ -217,8 +217,14 @@ static void nvenc_map_preset(NvencContext *ctx)
 
 static void nvenc_print_driver_requirement(AVCodecContext *avctx, int level)
 {
-#if NVENCAPI_CHECK_VERSION(11, 1)
+#if NVENCAPI_CHECK_VERSION(11, 2)
     const char *minver = "(unknown)";
+#elif NVENCAPI_CHECK_VERSION(11, 1)
+# if defined(_WIN32) || defined(__CYGWIN__)
+    const char *minver = "471.41";
+# else
+    const char *minver = "470.57.02";
+# endif
 #elif NVENCAPI_CHECK_VERSION(11, 0)
 # if defined(_WIN32) || defined(__CYGWIN__)
     const char *minver = "456.71";
@@ -961,6 +967,14 @@ static av_cold void nvenc_setup_rate_control(AVCodecContext *avctx)
 
         ctx->rc &= ~RC_MODE_DEPRECATED;
     }
+
+#ifdef NVENC_HAVE_QP_CHROMA_OFFSETS
+    ctx->encode_config.rcParams.cbQPIndexOffset = ctx->qp_cb_offset;
+    ctx->encode_config.rcParams.crQPIndexOffset = ctx->qp_cr_offset;
+#else
+    if (ctx->qp_cb_offset || ctx->qp_cr_offset)
+        av_log(avctx, AV_LOG_WARNING, "Failed setting QP CB/CR offsets, SDK 11.1 or greater required at compile time.\n");
+#endif
 
 #ifdef NVENC_HAVE_LDKFS
     if (ctx->ldkfs)

@@ -1,6 +1,4 @@
 /*
- * Copyright (C) 2007  Aurelien Jacobs <aurel@gnuage.org>
- *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -18,32 +16,38 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-/**
- * @file
- * huffman tree builder and VLC generator
- */
+/* shared code for simple demux/decode tools */
 
-#ifndef AVCODEC_HUFFMAN_H
-#define AVCODEC_HUFFMAN_H
+#ifndef DECODE_SIMPLE_H
+#define DECODE_SIMPLE_H
 
-#include <stdint.h>
+#include "libavformat/avformat.h"
 
-#include "vlc.h"
+#include "libavcodec/avcodec.h"
+#include "libavcodec/packet.h"
 
-typedef struct Node {
-    int16_t  sym;
-    int16_t  n0;
-    uint32_t count;
-} Node;
+#include "libavutil/dict.h"
+#include "libavutil/frame.h"
 
-#define FF_HUFFMAN_FLAG_HNODE_FIRST 0x01
-#define FF_HUFFMAN_FLAG_ZERO_COUNT  0x02
-#define FF_HUFFMAN_BITS 10
 
-typedef int (*HuffCmp)(const void *va, const void *vb);
-int ff_huff_build_tree(void *logctx, VLC *vlc, int nb_codes, int nb_bits,
-                       Node *nodes, HuffCmp cmp, int flags);
+typedef struct DecodeContext {
+    AVFormatContext *demuxer;
+    AVStream        *stream;
+    AVCodecContext  *decoder;
 
-int ff_huff_gen_len_table(uint8_t *dst, const uint64_t *stats, int n, int skip0);
+    AVPacket        *pkt;
+    AVFrame         *frame;
 
-#endif /* AVCODEC_HUFFMAN_H */
+    int (*process_frame)(struct DecodeContext *dc, AVFrame *frame);
+    void            *opaque;
+
+    AVDictionary    *decoder_opts;
+    int              max_frames;
+} DecodeContext;
+
+int ds_open(DecodeContext *dc, const char *url, int stream_idx);
+void ds_free(DecodeContext *dc);
+
+int ds_run(DecodeContext *dc);
+
+#endif /* DECODE_SIMPLE_H */

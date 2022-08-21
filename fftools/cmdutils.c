@@ -73,18 +73,12 @@ AVDictionary *format_opts, *codec_opts, *resample_opts;
 static FILE *report_file;
 static int report_file_level = AV_LOG_DEBUG;
 int hide_banner = 0;
-int cpu_count = -1;
 
 enum show_muxdemuxers {
     SHOW_DEFAULT,
     SHOW_DEMUXERS,
     SHOW_MUXERS,
 };
-
-void init_opts(void)
-{
-    av_dict_set(&sws_dict, "flags", "bicubic", 0);
-}
 
 void uninit_opts(void)
 {
@@ -670,7 +664,6 @@ static void finish_group(OptionParseContext *octx, int group_idx,
     resample_opts = NULL;
     sws_dict    = NULL;
     swr_opts    = NULL;
-    init_opts();
 
     memset(&octx->cur_group, 0, sizeof(octx->cur_group));
 }
@@ -708,8 +701,6 @@ static void init_parse_context(OptionParseContext *octx,
 
     octx->global_opts.group_def = &global_group;
     octx->global_opts.arg       = "";
-
-    init_opts();
 }
 
 void uninit_parse_context(OptionParseContext *octx)

@@ -35,8 +35,9 @@
 #include "drawutils.h"
 #include "formats.h"
 #include "internal.h"
-#include "vif.h"
 #include "video.h"
+
+#define NUM_DATA_BUFS 13
 
 typedef struct VIFContext {
     const AVClass *class;
@@ -46,7 +47,7 @@ typedef struct VIFContext {
     int height;
     int nb_threads;
     float factor;
-    float *data_buf[13];
+    float *data_buf[NUM_DATA_BUFS];
     float **temp;
     float *ref_data;
     float *main_data;
@@ -283,11 +284,11 @@ static int vif_filter1d(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
     return 0;
 }
 
-int ff_compute_vif2(AVFilterContext *ctx,
-                    const float *ref, const float *main, int w, int h,
-                    int ref_stride, int main_stride, float *score,
-                    float *data_buf[14], float **temp,
-                    int gnb_threads)
+static int compute_vif2(AVFilterContext *ctx,
+                        const float *ref, const float *main, int w, int h,
+                        int ref_stride, int main_stride, float *score,
+                        float *const data_buf[NUM_DATA_BUFS], float **temp,
+                        int gnb_threads)
 {
     ThreadData td;
     float *ref_scale = data_buf[0];
@@ -448,11 +449,9 @@ static AVFrame *do_vif(AVFilterContext *ctx, AVFrame *main, const AVFrame *ref)
         offset_16bit(s, ref, main, s->width);
     }
 
-    ff_compute_vif2(ctx,
-                    s->ref_data, s->main_data, s->width,
-                    s->height, s->width, s->width,
-                    score, s->data_buf, s->temp,
-                    s->nb_threads);
+    compute_vif2(ctx, s->ref_data, s->main_data,
+                 s->width, s->height, s->width, s->width,
+                 score, s->data_buf, s->temp, s->nb_threads);
 
     set_meta(metadata, "lavfi.vif.scale.0", score[0]);
     set_meta(metadata, "lavfi.vif.scale.1", score[1]);
@@ -515,7 +514,7 @@ static int config_input_ref(AVFilterLink *inlink)
         s->vif_max[i] = -DBL_MAX;
     }
 
-    for (int i = 0; i < 13; i++) {
+    for (int i = 0; i < NUM_DATA_BUFS; i++) {
         if (!(s->data_buf[i] = av_calloc(s->width, s->height * sizeof(float))))
             return AVERROR(ENOMEM);
     }
@@ -608,7 +607,7 @@ static av_cold void uninit(AVFilterContext *ctx)
                    i, s->vif_sum[i] / s->nb_frames, s->vif_min[i], s->vif_max[i]);
     }
 
-    for (int i = 0; i < 13; i++)
+    for (int i = 0; i < NUM_DATA_BUFS; i++)
         av_freep(&s->data_buf[i]);
 
     av_freep(&s->ref_data);

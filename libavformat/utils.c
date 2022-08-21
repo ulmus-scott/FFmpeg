@@ -5749,9 +5749,3 @@ FF_ENABLE_DEPRECATION_WARNINGS
 
     (void)remove_ts;
 }
-
-// temporary export for mpegts-mythtv.c; FFmpeg 5.0 exports it as ff_flush_packet_queue
-void mythtv_flush_packet_queue(AVFormatContext *s)
-{
-    flush_packet_queue(s);
-}

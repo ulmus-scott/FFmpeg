@@ -2266,7 +2266,7 @@ The filter accepts the following options:
 
 @table @option
 @item strength, s
-Set denoising strength. Allowed range is from 0.00001 to 10. Default value is 0.00001.
+Set denoising strength. Allowed range is from 0.00001 to 10000. Default value is 0.00001.
 
 @item patch, p
 Set patch radius duration. Allowed range is from 1 to 100 milliseconds.
@@ -2294,7 +2294,7 @@ Default value is @var{o}.
 @end table
 
 @item smooth, m
-Set smooth factor. Default value is @var{11}. Allowed range is from @var{1} to @var{15}.
+Set smooth factor. Default value is @var{11}. Allowed range is from @var{1} to @var{1000}.
 @end table
 
 @subsection Commands
@@ -4392,6 +4392,13 @@ This option is mostly useful if digital noise is not wanted to be amplified.
 
 @item channels, h
 Specify which channels to filter, by default all available channels are filtered.
+
+@item overlap, o
+Specify overlap for frames. If set to 0 (default) no frame overlapping is done.
+Using >0 and <1 values will make less conservative gain adjustments, like
+when framelen option is set to smaller value, if framelen option value is
+compensated for non-zero overlap then gain adjustments will be smoother across time
+compared to zero overlap case.
 @end table
 
 @subsection Commands
@@ -5425,6 +5432,10 @@ Apply bit crusher plugin from ArtyFX:
 lv2=p=http\\\\://www.openavproductions.com/artyfx#bitta:c=crush=0.3
 @end example
 @end itemize
+
+@subsection Commands
+
+This filter supports all options that are exported by plugin as commands.
 
 @section mcompand
 Multiband Compress or expand the audio's dynamic range.
@@ -11271,8 +11282,10 @@ text data in detection bboxes of side data. So please do not use this parameter
 if you are not sure about the text source.
 
 @item reload
-If set to 1, the @var{textfile} will be reloaded before each frame.
-Be sure to update it atomically, or it may be read partially, or even fail.
+The @var{textfile} will be reloaded at specified frame interval.
+Be sure to update @var{textfile} atomically, or it may be read partially,
+or even fail.
+Range is 0 to INT_MAX. Default is 0.
 
 @item x
 @item y
@@ -11422,10 +11435,14 @@ It can be used to add padding with zeros from the left.
 @item gmtime
 The time at which the filter is running, expressed in UTC.
 It can accept an argument: a strftime() format string.
+The format string is extended to support the variable @var{%[1-6]N}
+which prints fractions of the second with optionally specified number of digits.
 
 @item localtime
 The time at which the filter is running, expressed in the local time zone.
 It can accept an argument: a strftime() format string.
+The format string is extended to support the variable @var{%[1-6]N}
+which prints fractions of the second with optionally specified number of digits.
 
 @item metadata
 Frame metadata. Takes one or two arguments.
@@ -13423,11 +13440,20 @@ Display number of frames taken from filter.
 @item frame_count_out
 Display number of frames given out from filter.
 
+@item frame_count_delta
+Display delta number of frames between above two values.
+
 @item pts
 Display current filtered frame pts.
 
+@item pts_delta
+Display pts delta between current and previous frame.
+
 @item time
 Display current filtered frame time.
+
+@item time_delta
+Display time delta between current and previous frame.
 
 @item timebase
 Display time base for filter link.
@@ -13449,6 +13475,9 @@ Display number of samples taken from filter.
 
 @item sample_count_out
 Display number of samples given out from filter.
+
+@item sample_count_delta
+Display delta number of samples between above two values.
 @end table
 
 @item rate, r
@@ -15087,7 +15116,7 @@ expression
 
 @end table
 
-All expressions default to "val".
+All expressions default to "clipval".
 
 @subsection Commands
 
@@ -21578,6 +21607,23 @@ sharpen it, a value of zero will disable the effect.
 
 Default value is 0.0.
 
+@item alpha_msize_x, ax
+Set the alpha matrix horizontal size. It must be an odd integer
+between 3 and 23. The default value is 5.
+
+@item alpha_msize_y, ay
+Set the alpha matrix vertical size. It must be an odd integer
+between 3 and 23. The default value is 5.
+
+@item alpha_amount, aa
+Set the alpha effect strength. It must be a floating point number, reasonable
+values lay between -1.5 and 1.5.
+
+Negative values will blur the input video, while positive values will
+sharpen it, a value of zero will disable the effect.
+
+Default value is 0.0.
+
 @end table
 
 All parameters are optional and default to the equivalent of the
@@ -25231,6 +25277,9 @@ supposed to be generated forever.
 
 @item speed
 Set speed of gradients rotation.
+
+@item type, t
+Set type of gradients, can be @code{linear} or @code{radial}.
 @end table
 
 
@@ -25841,6 +25890,9 @@ Default value is @code{1024x256}.
 Specify list of colors separated by space or by '|' which will be used to
 draw channels. Unrecognized or missing colors will be replaced
 by white color.
+
+@item mode, m
+Set output mode. Can be @code{bars} or @code{trace}. Default is @code{bars}.
 @end table
 
 @section adrawgraph
@@ -25928,6 +25980,18 @@ replace old rows with new ones.
 scroll from top to bottom.
 @end table
 Default is @code{replace}.
+
+@item hmode
+Set histogram mode.
+
+It accepts the following values:
+@table @samp
+@item abs
+Use absolute values of samples.
+@item sign
+Use untouched values of samples.
+@end table
+Default is @code{abs}.
 @end table
 
 @section aphasemeter
@@ -26985,6 +27049,12 @@ The end time in seconds of the current command interval.
 
 @item TI
 The interpolated time of the current command interval, TI = (T - TS) / (TE - TS).
+
+@item W
+The video frame width.
+
+@item H
+The video frame height.
 @end table
 
 @end table

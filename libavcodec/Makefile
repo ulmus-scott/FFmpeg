@@ -96,7 +96,7 @@ OBJS-$(CONFIG_H264PARSE)               += h264_parse.o h2645_parse.o h264_ps.o
 OBJS-$(CONFIG_H264PRED)                += h264pred.o
 OBJS-$(CONFIG_H264QPEL)                += h264qpel.o
 OBJS-$(CONFIG_HEVCPARSE)               += hevc_parse.o h2645_parse.o hevc_ps.o hevc_sei.o hevc_data.o \
-                                          dynamic_hdr10_plus.o
+                                          dynamic_hdr10_plus.o dynamic_hdr_vivid.o
 OBJS-$(CONFIG_HPELDSP)                 += hpeldsp.o
 OBJS-$(CONFIG_HUFFMAN)                 += huffman.o
 OBJS-$(CONFIG_HUFFYUVDSP)              += huffyuvdsp.o
@@ -289,6 +289,8 @@ OBJS-$(CONFIG_DERF_DPCM_DECODER)       += dpcm.o
 OBJS-$(CONFIG_DIRAC_DECODER)           += diracdec.o dirac.o diracdsp.o diractab.o \
                                           dirac_arith.o dirac_dwt.o dirac_vlc.o
 OBJS-$(CONFIG_DFA_DECODER)             += dfa.o
+OBJS-$(CONFIG_DFPWM_DECODER)           += dfpwmdec.o
+OBJS-$(CONFIG_DFPWM_ENCODER)           += dfpwmenc.o
 OBJS-$(CONFIG_DNXHD_DECODER)           += dnxhddec.o dnxhddata.o
 OBJS-$(CONFIG_DNXHD_ENCODER)           += dnxhdenc.o dnxhddata.o
 OBJS-$(CONFIG_DOLBY_E_DECODER)         += dolby_e.o dolby_e_parse.o kbdwin.o
@@ -800,6 +802,7 @@ OBJS-$(CONFIG_ZMBV_ENCODER)            += zmbvenc.o
 # (AD)PCM decoders/encoders
 OBJS-$(CONFIG_PCM_ALAW_DECODER)           += pcm.o
 OBJS-$(CONFIG_PCM_ALAW_ENCODER)           += pcm.o
+OBJS-$(CONFIG_PCM_BLURAY_ENCODER)         += pcm-blurayenc.o
 OBJS-$(CONFIG_PCM_BLURAY_DECODER)         += pcm-bluray.o
 OBJS-$(CONFIG_PCM_DVD_DECODER)            += pcm-dvd.o
 OBJS-$(CONFIG_PCM_DVD_ENCODER)            += pcm-dvdenc.o

@@ -784,7 +784,7 @@ static void add_input_streams(OptionsContext *o, AVFormatContext *ic)
     for (i = 0; i < ic->nb_streams; i++) {
         AVStream *st = ic->streams[i];
         AVCodecParameters *par = st->codecpar;
-        InputStream *ist = av_mallocz(sizeof(*ist));
+        InputStream *ist;
         char *framerate = NULL, *hwaccel_device = NULL;
         const char *hwaccel = NULL;
         char *hwaccel_output_format = NULL;
@@ -795,12 +795,7 @@ static void add_input_streams(OptionsContext *o, AVFormatContext *ic)
         const AVOption *discard_opt = av_opt_find(&cc, "skip_frame", NULL,
                                                   0, AV_OPT_SEARCH_FAKE_OBJ);
 
-        if (!ist)
-            exit_program(1);
-
-        GROW_ARRAY(input_streams, nb_input_streams);
-        input_streams[nb_input_streams - 1] = ist;
-
+        ist = ALLOC_ARRAY_ELEM(input_streams, nb_input_streams);
         ist->st = st;
         ist->file_index = nb_input_files;
         ist->discard = 1;
@@ -1445,10 +1440,7 @@ static OutputStream *new_output_stream(OptionsContext *o, AVFormatContext *oc, e
     if (oc->nb_streams - 1 < o->nb_streamid_map)
         st->id = o->streamid_map[oc->nb_streams - 1];
 
-    GROW_ARRAY(output_streams, nb_output_streams);
-    if (!(ost = av_mallocz(sizeof(*ost))))
-        exit_program(1);
-    output_streams[nb_output_streams - 1] = ost;
+    ost = ALLOC_ARRAY_ELEM(output_streams, nb_output_streams);
 
     ost->file_index = nb_output_files - 1;
     ost->index      = idx;
@@ -1618,6 +1610,9 @@ static OutputStream *new_output_stream(OptionsContext *o, AVFormatContext *oc, e
     ost->muxing_queue = av_fifo_alloc2(8, sizeof(AVPacket*), 0);
     if (!ost->muxing_queue)
         exit_program(1);
+
+    MATCH_PER_STREAM_OPT(copy_initial_nonkeyframes, i,
+                         ost->copy_initial_nonkeyframes, oc, st);
 
     return ost;
 }
@@ -1925,8 +1920,6 @@ static OutputStream *new_video_stream(OptionsContext *o, AVFormatContext *oc, in
         ost->last_frame = av_frame_alloc();
         if (!ost->last_frame)
             exit_program(1);
-    } else {
-        MATCH_PER_STREAM_OPT(copy_initial_nonkeyframes, i, ost->copy_initial_nonkeyframes, oc ,st);
     }
 
     if (ost->stream_copy)
@@ -2053,8 +2046,6 @@ static OutputStream *new_subtitle_stream(OptionsContext *o, AVFormatContext *oc,
     subtitle_enc = ost->enc_ctx;
 
     subtitle_enc->codec_type = AVMEDIA_TYPE_SUBTITLE;
-
-    MATCH_PER_STREAM_OPT(copy_initial_nonkeyframes, i, ost->copy_initial_nonkeyframes, oc, st);
 
     if (!ost->stream_copy) {
         char *frame_size = NULL;
@@ -3283,9 +3274,8 @@ static int opt_audio_qscale(void *optctx, const char *opt, const char *arg)
 
 static int opt_filter_complex(void *optctx, const char *opt, const char *arg)
 {
-    FilterGraph *fg;
-    ALLOC_ARRAY_ELEM(filtergraphs, nb_filtergraphs);
-    fg = filtergraphs[nb_filtergraphs - 1];
+    FilterGraph *fg = ALLOC_ARRAY_ELEM(filtergraphs, nb_filtergraphs);
+
     fg->index      = nb_filtergraphs - 1;
     fg->graph_desc = av_strdup(arg);
     if (!fg->graph_desc)

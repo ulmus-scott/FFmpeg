@@ -738,6 +738,8 @@ It accepts the following parameters:
 Set expressions for PTS, DTS or both.
 @item duration
 Set expression for duration.
+@item time_base
+Set output time base.
 @end table
 
 The expressions are evaluated through the eval API and can contain the following
@@ -799,6 +801,9 @@ The next input duration.
 
 @item TB
 The timebase of stream packet belongs.
+
+@item TB_OUT
+The output timebase.
 
 @item SR
 The sample rate of stream packet belongs.

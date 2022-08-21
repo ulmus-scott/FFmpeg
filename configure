@@ -443,6 +443,7 @@ Optimization options (experts only):
   --disable-fma4           disable FMA4 optimizations
   --disable-avx2           disable AVX2 optimizations
   --disable-avx512         disable AVX-512 optimizations
+  --disable-avx512icl      disable AVX-512ICL optimizations
   --disable-aesni          disable AESNI optimizations
   --disable-armv5te        disable armv5te optimizations
   --disable-armv6          disable armv6 optimizations
@@ -2096,6 +2097,7 @@ ARCH_EXT_LIST_X86_SIMD="
     avx
     avx2
     avx512
+    avx512icl
     fma3
     fma4
     mmx
@@ -2265,6 +2267,7 @@ SYSTEM_FUNCS="
     CommandLineToArgvW
     fcntl
     getaddrinfo
+    getauxval
     gethrtime
     getopt
     GetModuleHandle
@@ -2664,6 +2667,7 @@ fma3_deps="avx"
 fma4_deps="avx"
 avx2_deps="avx"
 avx512_deps="avx2"
+avx512icl_deps="avx512"
 
 mmx_external_deps="x86asm"
 mmx_inline_deps="inline_asm x86"
@@ -4401,11 +4405,7 @@ cc_default="${cross_prefix}${cc_default}"
 cxx_default="${cross_prefix}${cxx_default}"
 nm_default="${cross_prefix}${nm_default}"
 pkg_config_default="${cross_prefix}${pkg_config_default}"
-if ${cross_prefix}${ranlib_default} 2>&1 | grep -q "\-D "; then
-    ranlib_default="${cross_prefix}${ranlib_default} -D"
-else
-    ranlib_default="${cross_prefix}${ranlib_default}"
-fi
+ranlib_default="${cross_prefix}${ranlib_default}"
 strip_default="${cross_prefix}${strip_default}"
 windres_default="${cross_prefix}${windres_default}"
 
@@ -4437,6 +4437,10 @@ set_default arch cc cxx doxygen pkg_config ranlib strip sysinclude \
     target_exec x86asmexe metalcc metallib
 enabled cross_compile || host_cc_default=$cc
 set_default host_cc
+
+if ${ranlib} 2>&1 | grep -q "\-D "; then
+    ranlib="${ranlib} -D"
+fi
 
 pkg_config_fail_message=""
 if ! $pkg_config --version >/dev/null 2>&1; then
@@ -6127,10 +6131,11 @@ EOF
             elf*) enabled debug && append X86ASMFLAGS $x86asm_debug ;;
         esac
 
-        enabled avx512 && check_x86asm avx512_external "vmovdqa32 [eax]{k1}{z}, zmm0"
-        enabled avx2   && check_x86asm avx2_external   "vextracti128 xmm0, ymm0, 0"
-        enabled xop    && check_x86asm xop_external    "vpmacsdd xmm0, xmm1, xmm2, xmm3"
-        enabled fma4   && check_x86asm fma4_external   "vfmaddps ymm0, ymm1, ymm2, ymm3"
+        enabled avx512    && check_x86asm avx512_external    "vmovdqa32 [eax]{k1}{z}, zmm0"
+        enabled avx512icl && check_x86asm avx512icl_external "vpdpwssds zmm31{k1}{z}, zmm29, zmm28"
+        enabled avx2      && check_x86asm avx2_external      "vextracti128 xmm0, ymm0, 0"
+        enabled xop       && check_x86asm xop_external       "vpmacsdd xmm0, xmm1, xmm2, xmm3"
+        enabled fma4      && check_x86asm fma4_external      "vfmaddps ymm0, ymm1, ymm2, ymm3"
         check_x86asm cpunop          "CPU amdnop"
     fi
 
@@ -7470,6 +7475,7 @@ if enabled x86; then
     echo "AVX enabled               ${avx-no}"
     echo "AVX2 enabled              ${avx2-no}"
     echo "AVX-512 enabled           ${avx512-no}"
+    echo "AVX-512ICL enabled        ${avx512icl-no}"
     echo "XOP enabled               ${xop-no}"
     echo "FMA3 enabled              ${fma3-no}"
     echo "FMA4 enabled              ${fma4-no}"

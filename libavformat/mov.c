@@ -50,6 +50,7 @@
 #include "libavutil/dovi_meta.h"
 #include "libavcodec/ac3tab.h"
 #include "libavcodec/flac.h"
+#include "libavcodec/hevc.h"
 #include "libavcodec/mpegaudiodecheader.h"
 #include "libavcodec/mlp_parse.h"
 #include "avformat.h"
@@ -3130,6 +3131,62 @@ static int mov_read_ctts(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     return 0;
 }
 
+static int mov_read_sgpd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
+{
+    AVStream *st;
+    MOVStreamContext *sc;
+    uint8_t version;
+    uint32_t grouping_type;
+    uint32_t default_length;
+    av_unused uint32_t default_group_description_index;
+    uint32_t entry_count;
+
+    if (c->fc->nb_streams < 1)
+        return 0;
+    st = c->fc->streams[c->fc->nb_streams - 1];
+    sc = st->priv_data;
+
+    version = avio_r8(pb); /* version */
+    avio_rb24(pb); /* flags */
+    grouping_type = avio_rl32(pb);
+
+    /*
+     * This function only supports "sync" boxes, but the code is able to parse
+     * other boxes (such as "tscl", "tsas" and "stsa")
+     */
+    if (grouping_type != MKTAG('s','y','n','c'))
+        return 0;
+
+    default_length = version >= 1 ? avio_rb32(pb) : 0;
+    default_group_description_index = version >= 2 ? avio_rb32(pb) : 0;
+    entry_count = avio_rb32(pb);
+
+    av_freep(&sc->sgpd_sync);
+    sc->sgpd_sync_count = entry_count;
+    sc->sgpd_sync = av_calloc(entry_count, sizeof(*sc->sgpd_sync));
+    if (!sc->sgpd_sync)
+        return AVERROR(ENOMEM);
+
+    for (uint32_t i = 0; i < entry_count && !pb->eof_reached; i++) {
+        uint32_t description_length = default_length;
+        if (version >= 1 && default_length == 0)
+            description_length = avio_rb32(pb);
+        if (grouping_type == MKTAG('s','y','n','c')) {
+            const uint8_t nal_unit_type = avio_r8(pb) & 0x3f;
+            sc->sgpd_sync[i] = nal_unit_type;
+            description_length -= 1;
+        }
+        avio_skip(pb, description_length);
+    }
+
+    if (pb->eof_reached) {
+        av_log(c->fc, AV_LOG_WARNING, "reached eof, corrupted SGPD atom\n");
+        return AVERROR_EOF;
+    }
+
+    return 0;
+}
+
 static int mov_read_sbgp(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
     AVStream *st;
@@ -3137,6 +3194,8 @@ static int mov_read_sbgp(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     unsigned int i, entries;
     uint8_t version;
     uint32_t grouping_type;
+    MOVSbgp *table, **tablep;
+    int *table_count;
 
     if (c->fc->nb_streams < 1)
         return 0;
@@ -3146,28 +3205,37 @@ static int mov_read_sbgp(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     version = avio_r8(pb); /* version */
     avio_rb24(pb); /* flags */
     grouping_type = avio_rl32(pb);
-    if (grouping_type != MKTAG( 'r','a','p',' '))
-        return 0; /* only support 'rap ' grouping */
+
+    if (grouping_type == MKTAG('r','a','p',' ')) {
+        tablep = &sc->rap_group;
+        table_count = &sc->rap_group_count;
+    } else if (grouping_type == MKTAG('s','y','n','c')) {
+        tablep = &sc->sync_group;
+        table_count = &sc->sync_group_count;
+    } else {
+        return 0;
+    }
+
     if (version == 1)
         avio_rb32(pb); /* grouping_type_parameter */
 
     entries = avio_rb32(pb);
     if (!entries)
         return 0;
-    if (sc->rap_group)
-        av_log(c->fc, AV_LOG_WARNING, "Duplicated SBGP atom\n");
-    av_free(sc->rap_group);
-    sc->rap_group_count = 0;
-    sc->rap_group = av_malloc_array(entries, sizeof(*sc->rap_group));
-    if (!sc->rap_group)
+    if (*tablep)
+        av_log(c->fc, AV_LOG_WARNING, "Duplicated SBGP %s atom\n", av_fourcc2str(grouping_type));
+    av_freep(tablep);
+    table = av_malloc_array(entries, sizeof(*table));
+    if (!table)
         return AVERROR(ENOMEM);
+    *tablep = table;
 
     for (i = 0; i < entries && !pb->eof_reached; i++) {
-        sc->rap_group[i].count = avio_rb32(pb); /* sample_count */
-        sc->rap_group[i].index = avio_rb32(pb); /* group_description_index */
+        table[i].count = avio_rb32(pb); /* sample_count */
+        table[i].index = avio_rb32(pb); /* group_description_index */
     }
 
-    sc->rap_group_count = i;
+    *table_count = i;
 
     if (pb->eof_reached) {
         av_log(c->fc, AV_LOG_WARNING, "reached eof, corrupted SBGP atom\n");
@@ -3815,6 +3883,69 @@ static void mov_fix_index(MOVContext *mov, AVStream *st)
     msc->current_index = msc->index_ranges[0].start;
 }
 
+static uint32_t get_sgpd_sync_index(const MOVStreamContext *sc, int nal_unit_type)
+{
+    for (uint32_t i = 0; i < sc->sgpd_sync_count; i++)
+        if (sc->sgpd_sync[i] == HEVC_NAL_CRA_NUT)
+            return i + 1;
+    return 0;
+}
+
+static int build_open_gop_key_points(AVStream *st)
+{
+    int k;
+    int sample_id = 0;
+    uint32_t cra_index;
+    MOVStreamContext *sc = st->priv_data;
+
+    if (st->codecpar->codec_id != AV_CODEC_ID_HEVC || !sc->sync_group_count)
+        return 0;
+
+    /* Build an unrolled index of the samples */
+    sc->sample_offsets_count = 0;
+    for (uint32_t i = 0; i < sc->ctts_count; i++)
+        sc->sample_offsets_count += sc->ctts_data[i].count;
+    av_freep(&sc->sample_offsets);
+    sc->sample_offsets = av_calloc(sc->sample_offsets_count, sizeof(*sc->sample_offsets));
+    if (!sc->sample_offsets)
+        return AVERROR(ENOMEM);
+    k = 0;
+    for (uint32_t i = 0; i < sc->ctts_count; i++)
+        for (int j = 0; j < sc->ctts_data[i].count; j++)
+             sc->sample_offsets[k++] = sc->ctts_data[i].duration;
+
+    /* The following HEVC NAL type reveal the use of open GOP sync points
+     * (TODO: BLA types may also be concerned) */
+    cra_index = get_sgpd_sync_index(sc, HEVC_NAL_CRA_NUT); /* Clean Random Access */
+    if (!cra_index)
+        return 0;
+
+    /* Build a list of open-GOP key samples */
+    sc->open_key_samples_count = 0;
+    for (uint32_t i = 0; i < sc->sync_group_count; i++)
+        if (sc->sync_group[i].index == cra_index)
+            sc->open_key_samples_count += sc->sync_group[i].count;
+    av_freep(&sc->open_key_samples);
+    sc->open_key_samples = av_calloc(sc->open_key_samples_count, sizeof(*sc->open_key_samples));
+    if (!sc->open_key_samples)
+        return AVERROR(ENOMEM);
+    k = 0;
+    for (uint32_t i = 0; i < sc->sync_group_count; i++) {
+        const MOVSbgp *sg = &sc->sync_group[i];
+        if (sg->index == cra_index)
+            for (uint32_t j = 0; j < sg->count; j++)
+                sc->open_key_samples[k++] = sample_id;
+        sample_id += sg->count;
+    }
+
+    /* Identify the minimal time step between samples */
+    sc->min_sample_duration = UINT_MAX;
+    for (uint32_t i = 0; i < sc->stts_count; i++)
+        sc->min_sample_duration = FFMIN(sc->min_sample_duration, sc->stts_data[i].duration);
+
+    return 0;
+}
+
 static void mov_build_index(MOVContext *mov, AVStream *st)
 {
     MOVStreamContext *sc = st->priv_data;
@@ -3829,6 +3960,10 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
     uint64_t stream_size = 0;
     MOVCtts *ctts_data_old = sc->ctts_data;
     unsigned int ctts_count_old = sc->ctts_count;
+
+    int ret = build_open_gop_key_points(st);
+    if (ret < 0)
+        return;
 
     if (sc->elst_count) {
         int i, edit_start_index = 0, multiple_edits = 0;
@@ -4363,6 +4498,8 @@ static int mov_read_trak(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     av_freep(&sc->stps_data);
     av_freep(&sc->elst_data);
     av_freep(&sc->rap_group);
+    av_freep(&sc->sync_group);
+    av_freep(&sc->sgpd_sync);
 
     return 0;
 }
@@ -5118,6 +5255,8 @@ static int mov_read_sidx(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     avio_rb16(pb); // reserved
 
     item_count = avio_rb16(pb);
+    if (item_count == 0)
+        return AVERROR_INVALIDDATA;
 
     for (i = 0; i < item_count; i++) {
         int index;
@@ -7241,6 +7380,7 @@ static const MOVParseTableEntry mov_default_parse_table[] = {
 { MKTAG('c','m','o','v'), mov_read_cmov },
 { MKTAG('c','h','a','n'), mov_read_chan }, /* channel layout */
 { MKTAG('d','v','c','1'), mov_read_dvc1 },
+{ MKTAG('s','g','p','d'), mov_read_sgpd },
 { MKTAG('s','b','g','p'), mov_read_sbgp },
 { MKTAG('h','v','c','C'), mov_read_glbl },
 { MKTAG('u','u','i','d'), mov_read_uuid },
@@ -7700,6 +7840,10 @@ static int mov_read_close(AVFormatContext *s)
         av_freep(&sc->stps_data);
         av_freep(&sc->elst_data);
         av_freep(&sc->rap_group);
+        av_freep(&sc->sync_group);
+        av_freep(&sc->sgpd_sync);
+        av_freep(&sc->sample_offsets);
+        av_freep(&sc->open_key_samples);
         av_freep(&sc->display_matrix);
         av_freep(&sc->index_ranges);
 
@@ -8372,6 +8516,49 @@ static int mov_seek_fragment(AVFormatContext *s, AVStream *st, int64_t timestamp
     return 0;
 }
 
+static int is_open_key_sample(const MOVStreamContext *sc, int sample)
+{
+    // TODO: a bisect search would scale much better
+    for (int i = 0; i < sc->open_key_samples_count; i++) {
+        const int oks = sc->open_key_samples[i];
+        if (oks == sample)
+            return 1;
+        if (oks > sample) /* list is monotically increasing so we can stop early */
+            break;
+    }
+    return 0;
+}
+
+/*
+ * Some key sample may be key frames but not IDR frames, so a random access to
+ * them may not be allowed.
+ */
+static int can_seek_to_key_sample(AVStream *st, int sample, int64_t requested_pts)
+{
+    MOVStreamContext *sc = st->priv_data;
+    FFStream *const sti = ffstream(st);
+    int64_t key_sample_dts, key_sample_pts;
+
+    if (st->codecpar->codec_id != AV_CODEC_ID_HEVC)
+        return 1;
+
+    if (sample >= sc->sample_offsets_count)
+        return 1;
+
+    key_sample_dts = sti->index_entries[sample].timestamp;
+    key_sample_pts = key_sample_dts + sc->sample_offsets[sample] + sc->dts_shift;
+
+    /*
+     * If the sample needs to be presented before an open key sample, they may
+     * not be decodable properly, even though they come after in decoding
+     * order.
+     */
+    if (is_open_key_sample(sc, sample) && key_sample_pts > requested_pts)
+        return 0;
+
+    return 1;
+}
+
 static int mov_seek_stream(AVFormatContext *s, AVStream *st, int64_t timestamp, int flags)
 {
     MOVStreamContext *sc = st->priv_data;
@@ -8387,12 +8574,19 @@ static int mov_seek_stream(AVFormatContext *s, AVStream *st, int64_t timestamp, 
     if (ret < 0)
         return ret;
 
-    sample = av_index_search_timestamp(st, timestamp, flags);
-    av_log(s, AV_LOG_TRACE, "stream %d, timestamp %"PRId64", sample %d\n", st->index, timestamp, sample);
-    if (sample < 0 && sti->nb_index_entries && timestamp < sti->index_entries[0].timestamp)
-        sample = 0;
-    if (sample < 0) /* not sure what to do */
-        return AVERROR_INVALIDDATA;
+    for (;;) {
+        sample = av_index_search_timestamp(st, timestamp, flags);
+        av_log(s, AV_LOG_TRACE, "stream %d, timestamp %"PRId64", sample %d\n", st->index, timestamp, sample);
+        if (sample < 0 && sti->nb_index_entries && timestamp < sti->index_entries[0].timestamp)
+            sample = 0;
+        if (sample < 0) /* not sure what to do */
+            return AVERROR_INVALIDDATA;
+
+        if (!sample || can_seek_to_key_sample(st, sample, timestamp))
+            break;
+        timestamp -= FFMAX(sc->min_sample_duration, 1);
+    }
+
     mov_current_sample_set(sc, sample);
     av_log(s, AV_LOG_TRACE, "stream %d, found sample %d\n", st->index, sc->current_sample);
     /* adjust ctts index */

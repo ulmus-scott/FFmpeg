@@ -1696,7 +1696,8 @@ no_output_pic:
             // input is not a shared pix -> reuse buffer for current_pix
             s->current_picture_ptr = s->reordered_input_picture[0];
             for (i = 0; i < 4; i++) {
-                s->new_picture.f->data[i] += INPLACE_OFFSET;
+                if (s->new_picture.f->data[i])
+                    s->new_picture.f->data[i] += INPLACE_OFFSET;
             }
         }
         ff_mpeg_unref_picture(s->avctx, &s->current_picture);
@@ -1993,8 +1994,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
         stuffing_count = ff_vbv_update(s, s->frame_bits);
         s->stuffing_bits = 8*stuffing_count;
         if (stuffing_count) {
-            if (s->pb.buf_end - s->pb.buf - (put_bits_count(&s->pb) >> 3) <
-                    stuffing_count + 50) {
+            if (put_bytes_left(&s->pb, 0) < stuffing_count + 50) {
                 av_log(avctx, AV_LOG_ERROR, "stuffing too large\n");
                 return -1;
             }
@@ -2890,12 +2890,12 @@ static void update_mb_info(MpegEncContext *s, int startcode)
 {
     if (!s->mb_info)
         return;
-    if (put_bits_count(&s->pb) - s->prev_mb_info*8 >= s->mb_info*8) {
+    if (put_bytes_count(&s->pb, 0) - s->prev_mb_info >= s->mb_info) {
         s->mb_info_size += 12;
         s->prev_mb_info = s->last_mb_info;
     }
     if (startcode) {
-        s->prev_mb_info = put_bits_count(&s->pb)/8;
+        s->prev_mb_info = put_bytes_count(&s->pb, 0);
         /* This might have incremented mb_info_size above, and we return without
          * actually writing any info into that slot yet. But in that case,
          * this will be called again at the start of the after writing the
@@ -2903,7 +2903,7 @@ static void update_mb_info(MpegEncContext *s, int startcode)
         return;
     }
 
-    s->last_mb_info = put_bits_count(&s->pb)/8;
+    s->last_mb_info = put_bytes_count(&s->pb, 0);
     if (!s->mb_info_size)
         s->mb_info_size += 12;
     write_mb_info(s);
@@ -2911,7 +2911,7 @@ static void update_mb_info(MpegEncContext *s, int startcode)
 
 int ff_mpv_reallocate_putbitbuffer(MpegEncContext *s, size_t threshold, size_t size_increase)
 {
-    if (   s->pb.buf_end - s->pb.buf - (put_bits_count(&s->pb)>>3) < threshold
+    if (put_bytes_left(&s->pb, 0) < threshold
         && s->slice_context_count == 1
         && s->pb.buf == s->avctx->internal->byte_buffer) {
         int lastgob_pos = s->ptr_lastgob - s->pb.buf;
@@ -2940,7 +2940,7 @@ int ff_mpv_reallocate_putbitbuffer(MpegEncContext *s, size_t threshold, size_t s
         s->ptr_lastgob   = s->pb.buf + lastgob_pos;
         s->vbv_delay_ptr = s->pb.buf + vbv_pos;
     }
-    if (s->pb.buf_end - s->pb.buf - (put_bits_count(&s->pb)>>3) < threshold)
+    if (put_bytes_left(&s->pb, 0) < threshold)
         return AVERROR(EINVAL);
     return 0;
 }
@@ -3032,13 +3032,13 @@ static int encode_thread(AVCodecContext *c, void *arg){
                                + s->mb_width*MAX_MB_BYTES;
 
             ff_mpv_reallocate_putbitbuffer(s, MAX_MB_BYTES, size_increase);
-            if(s->pb.buf_end - s->pb.buf - (put_bits_count(&s->pb)>>3) < MAX_MB_BYTES){
+            if (put_bytes_left(&s->pb, 0) < MAX_MB_BYTES){
                 av_log(s->avctx, AV_LOG_ERROR, "encoded frame too large\n");
                 return -1;
             }
             if(s->data_partitioning){
-                if(   s->pb2   .buf_end - s->pb2   .buf - (put_bits_count(&s->    pb2)>>3) < MAX_MB_BYTES
-                   || s->tex_pb.buf_end - s->tex_pb.buf - (put_bits_count(&s->tex_pb )>>3) < MAX_MB_BYTES){
+                if (put_bytes_left(&s->pb2,    0) < MAX_MB_BYTES ||
+                    put_bytes_left(&s->tex_pb, 0) < MAX_MB_BYTES) {
                     av_log(s->avctx, AV_LOG_ERROR, "encoded partitioned frame too large\n");
                     return -1;
                 }
@@ -3058,7 +3058,8 @@ static int encode_thread(AVCodecContext *c, void *arg){
             if(s->rtp_mode){
                 int current_packet_size, is_gob_start;
 
-                current_packet_size= ((put_bits_count(&s->pb)+7)>>3) - (s->ptr_lastgob - s->pb.buf);
+                current_packet_size = put_bytes_count(&s->pb, 1)
+                                      - (s->ptr_lastgob - s->pb.buf);
 
                 is_gob_start = s->rtp_payload_size &&
                                current_packet_size >= s->rtp_payload_size &&
@@ -3095,7 +3096,7 @@ static int encode_thread(AVCodecContext *c, void *arg){
                     current_packet_size= put_bits_ptr(&s->pb) - s->ptr_lastgob;
 
                     if (s->error_rate && s->resync_mb_x + s->resync_mb_y > 0) {
-                        int r= put_bits_count(&s->pb)/8 + s->picture_number + 16 + s->mb_x + s->mb_y;
+                        int r = put_bytes_count(&s->pb, 0) + s->picture_number + 16 + s->mb_x + s->mb_y;
                         int d = 100 / s->error_rate;
                         if(r % d == 0){
                             current_packet_size=0;

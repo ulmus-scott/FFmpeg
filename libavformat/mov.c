@@ -36,11 +36,9 @@
 #include "libavutil/intreadwrite.h"
 #include "libavutil/intfloat.h"
 #include "libavutil/mathematics.h"
-#include "libavutil/time_internal.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
 #include "libavutil/dict.h"
-#include "libavutil/display.h"
 #include "libavutil/opt.h"
 #include "libavutil/aes.h"
 #include "libavutil/aes_ctr.h"
@@ -49,7 +47,6 @@
 #include "libavutil/spherical.h"
 #include "libavutil/stereo3d.h"
 #include "libavutil/timecode.h"
-#include "libavutil/dovi_meta.h"
 #include "libavcodec/ac3tab.h"
 #include "libavcodec/flac.h"
 #include "libavcodec/hevc.h"
@@ -58,6 +55,7 @@
 #include "avformat.h"
 #include "internal.h"
 #include "avio_internal.h"
+#include "demux.h"
 #include "dovi_isom.h"
 #include "riff.h"
 #include "isom.h"
@@ -7689,17 +7687,16 @@ static int mov_read_default(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 
     if (atom.size < 0)
         atom.size = INT64_MAX;
-    while (total_size <= atom.size - 8 && !avio_feof(pb)) {
+    while (total_size <= atom.size - 8) {
         int (*parse)(MOVContext*, AVIOContext*, MOVAtom) = NULL;
-        a.size = atom.size;
-        a.type=0;
-        if (atom.size >= 8) {
-            a.size = avio_rb32(pb);
-            a.type = avio_rl32(pb);
-            if (((a.type == MKTAG('f','r','e','e') && c->moov_retry) ||
-                  a.type == MKTAG('h','o','o','v')) &&
-                a.size >= 8 &&
-                c->fc->strict_std_compliance < FF_COMPLIANCE_STRICT) {
+        a.size = avio_rb32(pb);
+        a.type = avio_rl32(pb);
+        if (avio_feof(pb))
+            break;
+        if (((a.type == MKTAG('f','r','e','e') && c->moov_retry) ||
+              a.type == MKTAG('h','o','o','v')) &&
+            a.size >= 8 &&
+            c->fc->strict_std_compliance < FF_COMPLIANCE_STRICT) {
                 uint32_t type;
                 avio_skip(pb, 4);
                 type = avio_rl32(pb);
@@ -7711,22 +7708,21 @@ static int mov_read_default(MOVContext *c, AVIOContext *pb, MOVAtom atom)
                     av_log(c->fc, AV_LOG_ERROR, "Detected moov in a free or hoov atom.\n");
                     a.type = MKTAG('m','o','o','v');
                 }
+        }
+        if (atom.type != MKTAG('r','o','o','t') &&
+            atom.type != MKTAG('m','o','o','v')) {
+            if (a.type == MKTAG('t','r','a','k') ||
+                a.type == MKTAG('m','d','a','t')) {
+                av_log(c->fc, AV_LOG_ERROR, "Broken file, trak/mdat not at top-level\n");
+                avio_skip(pb, -8);
+                c->atom_depth --;
+                return 0;
             }
-            if (atom.type != MKTAG('r','o','o','t') &&
-                atom.type != MKTAG('m','o','o','v')) {
-                if (a.type == MKTAG('t','r','a','k') ||
-                    a.type == MKTAG('m','d','a','t')) {
-                    av_log(c->fc, AV_LOG_ERROR, "Broken file, trak/mdat not at top-level\n");
-                    avio_skip(pb, -8);
-                    c->atom_depth --;
-                    return 0;
-                }
-            }
+        }
+        total_size += 8;
+        if (a.size == 1 && total_size + 8 <= atom.size) { /* 64 bit extended size */
+            a.size = avio_rb64(pb) - 8;
             total_size += 8;
-            if (a.size == 1 && total_size + 8 <= atom.size) { /* 64 bit extended size */
-                a.size = avio_rb64(pb) - 8;
-                total_size += 8;
-            }
         }
         av_log(c->fc, AV_LOG_TRACE, "type:'%s' parent:'%s' sz: %"PRId64" %"PRId64" %"PRId64"\n",
                av_fourcc2str(a.type), av_fourcc2str(atom.type), a.size, total_size, atom.size);
@@ -8036,12 +8032,13 @@ static int mov_read_timecode_track(AVFormatContext *s, AVStream *st)
     int64_t cur_pos = avio_tell(sc->pb);
     int64_t value;
     AVRational tc_rate = st->avg_frame_rate;
+    int tmcd_nb_frames = sc->tmcd_nb_frames;
     int rounded_tc_rate;
 
     if (!sti->nb_index_entries)
         return -1;
 
-    if (!tc_rate.num || !tc_rate.den || !sc->tmcd_nb_frames)
+    if (!tc_rate.num || !tc_rate.den || !tmcd_nb_frames)
         return -1;
 
     avio_seek(sc->pb, sti->index_entries->pos, SEEK_SET);
@@ -8058,9 +8055,15 @@ static int mov_read_timecode_track(AVFormatContext *s, AVStream *st)
      * format). */
 
     /* 60 fps content have tmcd_nb_frames set to 30 but tc_rate set to 60, so
-     * we multiply the frame number with the quotient. */
+     * we multiply the frame number with the quotient.
+     * See tickets #9492, #9710. */
     rounded_tc_rate = (tc_rate.num + tc_rate.den / 2) / tc_rate.den;
-    value = av_rescale(value, rounded_tc_rate, sc->tmcd_nb_frames);
+    /* Work around files where tmcd_nb_frames is rounded down from frame rate
+     * instead of up. See ticket #5978. */
+    if (tmcd_nb_frames == tc_rate.num / tc_rate.den &&
+        s->strict_std_compliance < FF_COMPLIANCE_STRICT)
+        tmcd_nb_frames = rounded_tc_rate;
+    value = av_rescale(value, rounded_tc_rate, tmcd_nb_frames);
 
     parse_timecode_in_framenum_format(s, st, value, flags);
 

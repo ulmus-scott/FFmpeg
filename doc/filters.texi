@@ -2050,9 +2050,11 @@ Set transform type of IIR filter.
 @table @option
 @item di
 @item dii
+@item tdi
 @item tdii
 @item latt
 @item svf
+@item zdf
 @end table
 
 @item precision, r
@@ -3479,9 +3481,11 @@ Set transform type of IIR filter.
 @table @option
 @item di
 @item dii
+@item tdi
 @item tdii
 @item latt
 @item svf
+@item zdf
 @end table
 
 @item precision, r
@@ -3498,6 +3502,13 @@ Always use float 32-bit.
 @item f64
 Always use float 64-bit.
 @end table
+
+@item block_size, b
+Set block size used for reverse IIR processing. If this value is set to high enough
+value (higher than impulse response length truncated when reaches near zero values) filtering
+will become linear phase otherwise if not big enough it will just produce nasty artifacts.
+
+Note that filter delay will be exactly this many samples when set to non-zero value.
 @end table
 
 @subsection Commands
@@ -3567,9 +3578,11 @@ Set transform type of IIR filter.
 @table @option
 @item di
 @item dii
+@item tdi
 @item tdii
 @item latt
 @item svf
+@item zdf
 @end table
 
 @item precision, r
@@ -3586,6 +3599,13 @@ Always use float 32-bit.
 @item f64
 Always use float 64-bit.
 @end table
+
+@item block_size, b
+Set block size used for reverse IIR processing. If this value is set to high enough
+value (higher than impulse response length truncated when reaches near zero values) filtering
+will become linear phase otherwise if not big enough it will just produce nasty artifacts.
+
+Note that filter delay will be exactly this many samples when set to non-zero value.
 @end table
 
 @subsection Commands
@@ -3665,9 +3685,11 @@ Set transform type of IIR filter.
 @table @option
 @item di
 @item dii
+@item tdi
 @item tdii
 @item latt
 @item svf
+@item zdf
 @end table
 
 @item precision, r
@@ -3684,6 +3706,13 @@ Always use float 32-bit.
 @item f64
 Always use float 64-bit.
 @end table
+
+@item block_size, b
+Set block size used for reverse IIR processing. If this value is set to high enough
+value (higher than impulse response length truncated when reaches near zero values) filtering
+will become linear phase otherwise if not big enough it will just produce nasty artifacts.
+
+Note that filter delay will be exactly this many samples when set to non-zero value.
 @end table
 
 @subsection Commands
@@ -3748,9 +3777,11 @@ Set transform type of IIR filter.
 @table @option
 @item di
 @item dii
+@item tdi
 @item tdii
 @item latt
 @item svf
+@item zdf
 @end table
 
 @item precision, r
@@ -3767,6 +3798,13 @@ Always use float 32-bit.
 @item f64
 Always use float 64-bit.
 @end table
+
+@item block_size, b
+Set block size used for reverse IIR processing. If this value is set to high enough
+value (higher than impulse response length truncated when reaches near zero values) filtering
+will become linear phase otherwise if not big enough it will just produce nasty artifacts.
+
+Note that filter delay will be exactly this many samples when set to non-zero value.
 @end table
 
 @section bs2b
@@ -4172,6 +4210,13 @@ Set input gain. Default is 0.9.
 
 @item level_out
 Set output gain. Default is 1.
+
+@item block_size
+Set block size used for reverse IIR processing. If this value is set to high enough
+value (higher than impulse response length truncated when reaches near zero values) filtering
+will become linear phase otherwise if not big enough it will just produce nasty artifacts.
+
+Note that filter delay will be exactly this many samples when set to non-zero value.
 @end table
 
 @subsection Commands
@@ -4541,9 +4586,11 @@ Set transform type of IIR filter.
 @table @option
 @item di
 @item dii
+@item tdi
 @item tdii
 @item latt
 @item svf
+@item zdf
 @end table
 
 @item precision, r
@@ -4560,6 +4607,13 @@ Always use float 32-bit.
 @item f64
 Always use float 64-bit.
 @end table
+
+@item block_size, b
+Set block size used for reverse IIR processing. If this value is set to high enough
+value (higher than impulse response length truncated when reaches near zero values) filtering
+will become linear phase otherwise if not big enough it will just produce nasty artifacts.
+
+Note that filter delay will be exactly this many samples when set to non-zero value.
 @end table
 
 @subsection Examples
@@ -5043,9 +5097,11 @@ Set transform type of IIR filter.
 @table @option
 @item di
 @item dii
+@item tdi
 @item tdii
 @item latt
 @item svf
+@item zdf
 @end table
 
 @item precision, r
@@ -5062,6 +5118,13 @@ Always use float 32-bit.
 @item f64
 Always use float 64-bit.
 @end table
+
+@item block_size, b
+Set block size used for reverse IIR processing. If this value is set to high enough
+value (higher than impulse response length truncated when reaches near zero values) filtering
+will become linear phase otherwise if not big enough it will just produce nasty artifacts.
+
+Note that filter delay will be exactly this many samples when set to non-zero value.
 @end table
 
 @subsection Commands
@@ -5394,9 +5457,11 @@ Set transform type of IIR filter.
 @table @option
 @item di
 @item dii
+@item tdi
 @item tdii
 @item latt
 @item svf
+@item zdf
 @end table
 
 @item precision, r
@@ -5413,6 +5478,13 @@ Always use float 32-bit.
 @item f64
 Always use float 64-bit.
 @end table
+
+@item block_size, b
+Set block size used for reverse IIR processing. If this value is set to high enough
+value (higher than impulse response length truncated when reaches near zero values) filtering
+will become linear phase otherwise if not big enough it will just produce nasty artifacts.
+
+Note that filter delay will be exactly this many samples when set to non-zero value.
 @end table
 
 @subsection Examples
@@ -6631,9 +6703,11 @@ Set transform type of IIR filter.
 @table @option
 @item di
 @item dii
+@item tdi
 @item tdii
 @item latt
 @item svf
+@item zdf
 @end table
 
 @item precision, r
@@ -6650,6 +6724,13 @@ Always use float 32-bit.
 @item f64
 Always use float 64-bit.
 @end table
+
+@item block_size, b
+Set block size used for reverse IIR processing. If this value is set to high enough
+value (higher than impulse response length truncated when reaches near zero values) filtering
+will become linear phase otherwise if not big enough it will just produce nasty artifacts.
+
+Note that filter delay will be exactly this many samples when set to non-zero value.
 @end table
 
 @subsection Commands

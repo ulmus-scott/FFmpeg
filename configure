@@ -3435,7 +3435,7 @@ latm_muxer_select="aac_adtstoasc_bsf mpeg4audio"
 matroska_audio_muxer_select="matroska_muxer"
 matroska_demuxer_select="riffdec"
 matroska_demuxer_suggest="bzlib zlib"
-matroska_muxer_select="mpeg4audio riffenc vp9_superframe_bsf aac_adtstoasc_bsf"
+matroska_muxer_select="mpeg4audio riffenc aac_adtstoasc_bsf pgs_frame_merge_bsf vp9_superframe_bsf"
 mlp_demuxer_select="mlp_parser"
 mmf_muxer_select="riffenc"
 mov_demuxer_select="iso_media riffdec"
@@ -6744,7 +6744,7 @@ fi
 
 if enabled sdl2; then
     SDL2_CONFIG="${cross_prefix}sdl2-config"
-    test_pkg_config sdl2 "sdl2 >= 2.0.1 sdl2 < 2.1.0" SDL_events.h SDL_PollEvent
+    test_pkg_config sdl2 "sdl2 >= 2.0.1 sdl2 < 3.0.0" SDL_events.h SDL_PollEvent
     if disabled sdl2 && "${SDL2_CONFIG}" --version > /dev/null 2>&1; then
         sdl2_cflags=$("${SDL2_CONFIG}" --cflags)
         sdl2_extralibs=$("${SDL2_CONFIG}" --libs)

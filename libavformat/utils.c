@@ -5000,7 +5000,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     if (changes)
     {
         // flush queued packets after a stream change (might need to make smarter)
-        flush_packet_queue(s);
+        ff_flush_packet_queue(s);
 
         /* renumber the streams */
         av_log(NULL, AV_LOG_DEBUG, "av_remove_stream: renumbering streams\n");

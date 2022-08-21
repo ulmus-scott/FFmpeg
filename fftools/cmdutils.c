@@ -1345,9 +1345,9 @@ static int show_formats_devices(void *optctx, const char *opt, const char *arg, 
             break;
         last_name = name;
 
-        printf(" %s%s %-15s %s\n",
-               decode ? "D" : " ",
-               encode ? "E" : " ",
+        printf(" %c%c %-15s %s\n",
+               decode ? 'D' : ' ',
+               encode ? 'E' : ' ',
                name,
             long_name ? long_name:" ");
     }
@@ -2230,19 +2230,13 @@ static int print_device_sources(const AVInputFormat *fmt, AVDictionary *opts)
         return AVERROR(EINVAL);
 
     printf("Auto-detected sources for %s:\n", fmt->name);
-    if (!fmt->get_device_list) {
-        ret = AVERROR(ENOSYS);
-        printf("Cannot list sources. Not implemented.\n");
-        goto fail;
-    }
-
     if ((ret = avdevice_list_input_sources(fmt, NULL, opts, &device_list)) < 0) {
-        printf("Cannot list sources.\n");
+        printf("Cannot list sources: %s\n", av_err2str(ret));
         goto fail;
     }
 
     for (i = 0; i < device_list->nb_devices; i++) {
-        printf("%s %s [%s]\n", device_list->default_device == i ? "*" : " ",
+        printf("%c %s [%s]\n", device_list->default_device == i ? '*' : ' ',
                device_list->devices[i]->device_name, device_list->devices[i]->device_description);
     }
 
@@ -2260,19 +2254,13 @@ static int print_device_sinks(const AVOutputFormat *fmt, AVDictionary *opts)
         return AVERROR(EINVAL);
 
     printf("Auto-detected sinks for %s:\n", fmt->name);
-    if (!fmt->get_device_list) {
-        ret = AVERROR(ENOSYS);
-        printf("Cannot list sinks. Not implemented.\n");
-        goto fail;
-    }
-
     if ((ret = avdevice_list_output_sinks(fmt, NULL, opts, &device_list)) < 0) {
-        printf("Cannot list sinks.\n");
+        printf("Cannot list sinks: %s\n", av_err2str(ret));
         goto fail;
     }
 
     for (i = 0; i < device_list->nb_devices; i++) {
-        printf("%s %s [%s]\n", device_list->default_device == i ? "*" : " ",
+        printf("%c %s [%s]\n", device_list->default_device == i ? '*' : ' ',
                device_list->devices[i]->device_name, device_list->devices[i]->device_description);
     }
 

@@ -2363,6 +2363,42 @@ Default value is 8.
 
 This filter supports the all above options as @ref{commands}.
 
+@section apsyclip
+Apply Psychoacoustic clipper to input audio stream.
+
+The filter accepts the following options:
+
+@table @option
+@item level_in
+Set input gain. By default it is 1. Range is [0.015625 - 64].
+
+@item level_out
+Set output gain. By default it is 1. Range is [0.015625 - 64].
+
+@item clip
+Set the clipping start value. Default value is 0dBFS or 1.
+
+@item diff
+Output only difference samples, useful to hear introduced distortions.
+By default is disabled.
+
+@item adaptive
+Set strenght of adaptive distortion applied. Default value is 0.5.
+Allowed range is from 0 to 1.
+
+@item iterations
+Set number of iterations of psychoacoustic clipper.
+Allowed range is from 1 to 20. Default value is 10.
+
+@item level
+Auto level output signal. Default is disabled.
+This normalizes audio back to 0dBFS if enabled.
+@end table
+
+@subsection Commands
+
+This filter supports the all above options as @ref{commands}.
+
 @section apulsator
 
 Audio pulsator is something between an autopanner and a tremolo.
@@ -2693,6 +2729,7 @@ Flat_factor
 Peak_count
 Noise_floor
 Noise_floor_count
+Entropy
 Bit_depth
 Dynamic_range
 Zero_crossings
@@ -2717,6 +2754,7 @@ Flat_factor
 Peak_count
 Noise_floor
 Noise_floor_count
+Entropy
 Bit_depth
 Number_of_samples
 Number_of_NaNs
@@ -2794,6 +2832,9 @@ Minimum local peak measured in dBFS over a short window.
 @item Noise floor count
 Number of occasions (not the number of samples) that the signal attained
 @var{Noise floor}.
+
+@item Entropy
+Entropy measured across whole audio. Entropy of value near 1.0 is typically measured for white noise.
 
 @item Bit depth
 Overall bit depth of audio. Number of bits used for each sample.
@@ -18349,6 +18390,27 @@ If the specified expression is not valid, it is kept at its current
 value.
 @end table
 
+@section scharr
+Apply scharr operator to input video stream.
+
+The filter accepts the following option:
+
+@table @option
+@item planes
+Set which planes will be processed, unprocessed planes will be copied.
+By default value 0xf, all planes will be processed.
+
+@item scale
+Set value which will be multiplied with filtered result.
+
+@item delta
+Set value which will be added to filtered result.
+@end table
+
+@subsection Commands
+
+This filter supports the all above options as @ref{commands}.
+
 @section scroll
 Scroll input video horizontally and/or vertically by constant speed.
 
@@ -22378,6 +22440,7 @@ Set one of available transition effects:
 @item wipebr
 @item squeezeh
 @item squeezev
+@item zoomin
 @end table
 Default transition effect is fade.
 

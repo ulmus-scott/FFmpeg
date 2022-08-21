@@ -542,6 +542,7 @@ static int config_props(AVFilterLink *outlink)
             av_opt_set_int(s, "sws_flags", scale->flags, 0);
             av_opt_set_int(s, "param0", scale->param[0], 0);
             av_opt_set_int(s, "param1", scale->param[1], 0);
+            av_opt_set_int(s, "threads", ff_filter_get_nb_threads(ctx), 0);
             if (scale->in_range != AVCOL_RANGE_UNSPECIFIED)
                 av_opt_set_int(s, "src_range",
                                scale->in_range == AVCOL_RANGE_JPEG, 0);
@@ -619,29 +620,54 @@ static int request_frame_ref(AVFilterLink *outlink)
     return ff_request_frame(outlink->src->inputs[1]);
 }
 
-static int scale_slice(ScaleContext *scale, AVFrame *out_buf, AVFrame *cur_pic, struct SwsContext *sws, int y, int h, int mul, int field)
+static void frame_offset(AVFrame *frame, int dir, int is_pal)
 {
-    const uint8_t *in[4];
-    uint8_t *out[4];
-    int in_stride[4],out_stride[4];
-    int i;
-
-    for (i=0; i<4; i++) {
-        int vsub= ((i+1)&2) ? scale->vsub : 0;
-        ptrdiff_t  in_offset = ((y>>vsub)+field) * cur_pic->linesize[i];
-        ptrdiff_t out_offset =            field  * out_buf->linesize[i];
-         in_stride[i] = cur_pic->linesize[i] * mul;
-        out_stride[i] = out_buf->linesize[i] * mul;
-         in[i] = FF_PTR_ADD(cur_pic->data[i],  in_offset);
-        out[i] = FF_PTR_ADD(out_buf->data[i], out_offset);
+    for (int i = 0; i < 4 && frame->data[i]; i++) {
+        if (i == 1 && is_pal)
+            break;
+        frame->data[i] += frame->linesize[i] * dir;
     }
-    if (scale->input_is_pal)
-         in[1] = cur_pic->data[1];
-    if (scale->output_is_pal)
-        out[1] = out_buf->data[1];
+}
 
-    return sws_scale(sws, in, in_stride, y/mul, h,
-                         out,out_stride);
+static int scale_field(ScaleContext *scale, AVFrame *dst, AVFrame *src,
+                       int field)
+{
+    int orig_h_src = src->height;
+    int orig_h_dst = dst->height;
+    int ret;
+
+    // offset the data pointers for the bottom field
+    if (field) {
+        frame_offset(src, 1, scale->input_is_pal);
+        frame_offset(dst, 1, scale->output_is_pal);
+    }
+
+    // take every second line
+    for (int i = 0; i < 4; i++) {
+        src->linesize[i] *= 2;
+        dst->linesize[i] *= 2;
+    }
+    src->height /= 2;
+    dst->height /= 2;
+
+    ret = sws_scale_frame(scale->isws[field], dst, src);
+    if (ret < 0)
+        return ret;
+
+    // undo the changes we made above
+    for (int i = 0; i < 4; i++) {
+        src->linesize[i] /= 2;
+        dst->linesize[i] /= 2;
+    }
+    src->height = orig_h_src;
+    dst->height = orig_h_dst;
+
+    if (field) {
+        frame_offset(src, -1, scale->input_is_pal);
+        frame_offset(dst, -1, scale->output_is_pal);
+    }
+
+    return 0;
 }
 
 static int scale_frame(AVFilterLink *link, AVFrame *in, AVFrame **frame_out)
@@ -800,11 +826,11 @@ scale:
               INT_MAX);
 
     if (scale->interlaced>0 || (scale->interlaced<0 && in->interlaced_frame)) {
-        ret = scale_slice(scale, out, in, scale->isws[0], 0, (link->h+1)/2, 2, 0);
+        ret = scale_field(scale, out, in, 0);
         if (ret >= 0)
-            ret = scale_slice(scale, out, in, scale->isws[1], 0,  link->h   /2, 2, 1);
+            ret = scale_field(scale, out, in, 1);
     } else {
-        ret = scale_slice(scale, out, in, scale->sws, 0, link->h, 1, 0);
+        ret = sws_scale_frame(scale->sws, out, in);
     }
 
     av_frame_free(&in);

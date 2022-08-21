@@ -14679,6 +14679,13 @@ filter choosing the best match with the given options, and the filter will
 output the chosen camera and lens models (logged with level "info"). You must
 provide the make, camera model, and lens model as they are required.
 
+To obtain a list of available makes and models, leave out one or both of @code{make} and
+@code{model} options. The filter will send the full list to the log with level @code{INFO}.
+The first column is the make and the second column is the model.
+To obtain a list of available lenses, set any values for make and model and leave out the
+@code{lens_model} option. The filter will send the full list of lenses in the log with level
+@code{INFO}. The ffmpeg tool will exit after the list is printed.
+
 The filter accepts the following options:
 
 @table @option
@@ -14692,6 +14699,10 @@ required.
 @item lens_model
 The model of the lens (for example, "Canon EF-S 18-55mm f/3.5-5.6 IS STM"). This
 option is required.
+
+@item db_path
+The full path to the lens database folder. If not set, the filter will attempt to
+load the database from the install path when the library was built. Default is unset.
 
 @item mode
 The type of correction to apply. The following values are valid options:
@@ -21406,9 +21417,8 @@ The filter accepts the following options:
 @table @option
 
 @item layout
-Set the grid size (i.e. the number of lines and columns). For the syntax of
-this option, check the
-@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+Set the grid size in the form @code{COLUMNSxROWS}. Range is upto UINT_MAX cells.
+Default is @code{6x5}.
 
 @item nb_frames
 Set the maximum number of frames to render in the given area. It must be less
@@ -21416,12 +21426,12 @@ than or equal to @var{w}x@var{h}. The default value is @code{0}, meaning all
 the area will be used.
 
 @item margin
-Set the outer border margin in pixels.
+Set the outer border margin in pixels. Range is 0 to 1024. Default is @code{0}.
 
 @item padding
 Set the inner border thickness (i.e. the number of pixels between frames). For
 more advanced padding options (such as having different values for the edges),
-refer to the pad video filter.
+refer to the pad video filter. Range is 0 to 1024. Default is @code{0}.
 
 @item color
 Specify the color of the unused area. For the syntax of this option, check the
@@ -21430,12 +21440,12 @@ The default value of @var{color} is "black".
 
 @item overlap
 Set the number of frames to overlap when tiling several successive frames together.
-The value must be between @code{0} and @var{nb_frames - 1}.
+The value must be between @code{0} and @var{nb_frames - 1}. Default is @code{0}.
 
 @item init_padding
 Set the number of frames to initially be empty before displaying first output frame.
 This controls how soon will one get first output frame.
-The value must be between @code{0} and @var{nb_frames - 1}.
+The value must be between @code{0} and @var{nb_frames - 1}. Default is @code{0}.
 @end table
 
 @subsection Examples
@@ -25874,7 +25884,7 @@ supposed to be generated forever.
 Set speed of gradients rotation.
 
 @item type, t
-Set type of gradients, can be @code{linear} or @code{radial}.
+Set type of gradients, can be @code{linear} or @code{radial} or @code{circular} or @code{spiral}.
 @end table
 
 
@@ -29275,6 +29285,43 @@ Below is a description of the currently available multimedia sources.
 
 This is the same as @ref{movie} source, except it selects an audio
 stream by default.
+
+@section avsynctest
+Generate an Audio/Video Sync Test.
+
+Generated stream periodically shows flash video frame and emits beep in audio.
+Useful to inspect A/V sync issues.
+
+It accepts the following options:
+
+@table @option
+@item size, s
+Set output video size. Default value is @code{hd720}.
+
+@item framerate, fr
+Set output video frame rate. Default value is @code{30}.
+
+@item samplerate, sr
+Set output audio sample rate. Default value is @code{44100}.
+
+@item amplitude, a
+Set output audio beep amplitude. Default value is @code{0.7}.
+
+@item period, p
+Set output audio beep period in seconds. Default value is @code{3}.
+
+@item delay, dl
+Set output video flash delay in number of frames. Default value is @code{0}.
+
+@item cycle, c
+Enable cycling of video delays, by default is disabled.
+
+@item duration, d
+Set stream output duration. By default duration is unlimited.
+
+@item fg, bg, ag
+Set foreground/background/additional color.
+@end table
 
 @anchor{movie}
 @section movie

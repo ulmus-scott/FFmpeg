@@ -194,18 +194,6 @@ static int update_stream_avctx(AVFormatContext *s)
             sti->parser = NULL;
         }
 
-        /* if the demuxer exports old channel layouts, convert it to new */
-        if (!st->codecpar->ch_layout.nb_channels &&
-            st->codecpar->channels) {
-            if (st->codecpar->channel_layout) {
-                av_channel_layout_from_mask(&st->codecpar->ch_layout,
-                                            st->codecpar->channel_layout);
-            } else {
-                st->codecpar->ch_layout.order       = AV_CHANNEL_ORDER_UNSPEC;
-                st->codecpar->ch_layout.nb_channels = st->codecpar->channels;
-            }
-        }
-
 #if FF_API_OLD_CHANNEL_LAYOUT
 FF_DISABLE_DEPRECATION_WARNINGS
         if (st->codecpar->ch_layout.nb_channels &&
@@ -1357,16 +1345,38 @@ static int read_frame_internal(AVFormatContext *s, AVPacket *pkt)
             }
             got_packet = 1;
         } else if (st->discard < AVDISCARD_ALL) {
+#if FF_API_OLD_CHANNEL_LAYOUT
+FF_DISABLE_DEPRECATION_WARNINGS
+            int orig_channels = sti->avctx->channels;
+            uint64_t orig_channel_layout = sti->avctx->channel_layout;
+FF_ENABLE_DEPRECATION_WARNINGS
+#endif
             if ((ret = parse_packet(s, pkt, pkt->stream_index, 0)) < 0)
                 return ret;
             st->codecpar->sample_rate = sti->avctx->sample_rate;
             st->codecpar->bit_rate = sti->avctx->bit_rate;
 #if FF_API_OLD_CHANNEL_LAYOUT
 FF_DISABLE_DEPRECATION_WARNINGS
-            st->codecpar->channels = sti->avctx->channels;
-            st->codecpar->channel_layout = sti->avctx->channel_layout;
+            /* parser setting the old-style fields */
+            if (sti->avctx->channels != orig_channels ||
+                sti->avctx->channel_layout != orig_channel_layout) {
+                av_channel_layout_uninit(&sti->avctx->ch_layout);
+                if (sti->avctx->channel_layout) {
+                    av_channel_layout_from_mask(&sti->avctx->ch_layout, sti->avctx->channel_layout);
+                } else {
+                    sti->avctx->ch_layout.order       = AV_CHANNEL_ORDER_UNSPEC;
+                    sti->avctx->ch_layout.nb_channels = sti->avctx->channels;
+                }
+            }
+
+            st->codecpar->channels = sti->avctx->ch_layout.nb_channels;
+            st->codecpar->channel_layout = sti->avctx->ch_layout.order == AV_CHANNEL_ORDER_NATIVE ?
+                                           sti->avctx->ch_layout.u.mask : 0;
 FF_ENABLE_DEPRECATION_WARNINGS
 #endif
+            ret = av_channel_layout_copy(&st->codecpar->ch_layout, &sti->avctx->ch_layout);
+            if (ret < 0)
+                return ret;
             st->codecpar->codec_id = sti->avctx->codec_id;
         } else {
             /* free packet */
@@ -1976,7 +1986,7 @@ static int has_codec_parameters(const AVStream *st, const char **errmsg_ptr)
             FAIL("unspecified sample format");
         if (!avctx->sample_rate)
             FAIL("unspecified sample rate");
-        if (!avctx->channels)
+        if (!avctx->ch_layout.nb_channels)
             FAIL("unspecified number of channels");
         if (sti->info->found_decoder >= 0 && !sti->nb_decoded_frames && avctx->codec_id == AV_CODEC_ID_DTS)
             FAIL("no decodable DTS frames");

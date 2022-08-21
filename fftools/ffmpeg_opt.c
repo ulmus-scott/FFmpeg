@@ -134,12 +134,6 @@ static const char *const opt_name_enc_time_bases[]            = {"enc_time_base"
     }\
 }
 
-const HWAccel hwaccels[] = {
-#if CONFIG_VIDEOTOOLBOX
-    { "videotoolbox", videotoolbox_init, HWACCEL_VIDEOTOOLBOX, AV_PIX_FMT_VIDEOTOOLBOX },
-#endif
-    { 0 },
-};
 HWDevice *filter_hw_device;
 
 char *vstats_filename;
@@ -153,7 +147,6 @@ int audio_volume      = 256;
 int audio_sync_method = 0;
 int video_sync_method = VSYNC_AUTO;
 float frame_drop_threshold = 0;
-int do_deinterlace    = 0;
 int do_benchmark      = 0;
 int do_benchmark_all  = 0;
 int do_hex_dump       = 0;
@@ -176,11 +169,9 @@ int auto_conversion_filters = 1;
 int64_t stats_period = 500000;
 
 
-static int intra_only         = 0;
 static int file_overwrite     = 0;
 static int no_file_overwrite  = 0;
 static int do_psnr            = 0;
-static int input_sync;
 static int input_stream_potentially_available = 0;
 static int ignore_unknown_streams = 0;
 static int copy_unknown_streams = 0;
@@ -303,27 +294,6 @@ static int opt_stats_period(void *optctx, const char *opt, const char *arg)
     av_log(NULL, AV_LOG_INFO, "ffmpeg stats and -progress period set to %s.\n", arg);
 
     return 0;
-}
-
-static int opt_sameq(void *optctx, const char *opt, const char *arg)
-{
-    av_log(NULL, AV_LOG_ERROR, "Option '%s' was removed. "
-           "If you are looking for an option to preserve the quality (which is not "
-           "what -%s was for), use -qscale 0 or an equivalent quality factor option.\n",
-           opt, opt);
-    return AVERROR(EINVAL);
-}
-
-static int opt_video_channel(void *optctx, const char *opt, const char *arg)
-{
-    av_log(NULL, AV_LOG_WARNING, "This option is deprecated, use -channel.\n");
-    return opt_default(optctx, "channel", arg);
-}
-
-static int opt_video_standard(void *optctx, const char *opt, const char *arg)
-{
-    av_log(NULL, AV_LOG_WARNING, "This option is deprecated, use -standard.\n");
-    return opt_default(optctx, "standard", arg);
 }
 
 static int opt_audio_codec(void *optctx, const char *opt, const char *arg)
@@ -893,10 +863,6 @@ static void add_input_streams(OptionsContext *o, AVFormatContext *ic)
         if (!ist->decoded_frame)
             exit_program(1);
 
-        ist->filter_frame = av_frame_alloc();
-        if (!ist->filter_frame)
-            exit_program(1);
-
         ist->pkt = av_packet_alloc();
         if (!ist->pkt)
             exit_program(1);
@@ -959,21 +925,10 @@ static void add_input_streams(OptionsContext *o, AVFormatContext *ic)
                 else if (!strcmp(hwaccel, "auto"))
                     ist->hwaccel_id = HWACCEL_AUTO;
                 else {
-                    enum AVHWDeviceType type;
-                    int i;
-                    for (i = 0; hwaccels[i].name; i++) {
-                        if (!strcmp(hwaccels[i].name, hwaccel)) {
-                            ist->hwaccel_id = hwaccels[i].id;
-                            break;
-                        }
-                    }
-
-                    if (!ist->hwaccel_id) {
-                        type = av_hwdevice_find_type_by_name(hwaccel);
-                        if (type != AV_HWDEVICE_TYPE_NONE) {
-                            ist->hwaccel_id = HWACCEL_GENERIC;
-                            ist->hwaccel_device_type = type;
-                        }
+                    enum AVHWDeviceType type = av_hwdevice_find_type_by_name(hwaccel);
+                    if (type != AV_HWDEVICE_TYPE_NONE) {
+                        ist->hwaccel_id = HWACCEL_GENERIC;
+                        ist->hwaccel_device_type = type;
                     }
 
                     if (!ist->hwaccel_id) {
@@ -1641,6 +1596,7 @@ static OutputStream *new_output_stream(OptionsContext *o, AVFormatContext *oc, e
 
     ost->max_muxing_queue_size = 128;
     MATCH_PER_STREAM_OPT(max_muxing_queue_size, i, ost->max_muxing_queue_size, oc, st);
+    ost->max_muxing_queue_size = FFMIN(ost->max_muxing_queue_size, INT_MAX / sizeof(ost->pkt));
     ost->max_muxing_queue_size *= sizeof(ost->pkt);
 
     ost->muxing_queue_data_size = 0;
@@ -1826,8 +1782,6 @@ static OutputStream *new_video_stream(OptionsContext *o, AVFormatContext *oc, in
         }
         st->sample_aspect_ratio = video_enc->sample_aspect_ratio;
 
-        if (intra_only)
-            video_enc->gop_size = 0;
         MATCH_PER_STREAM_OPT(intra_matrices, str, intra_matrix, oc, st);
         if (intra_matrix) {
             if (!(video_enc->intra_matrix = av_mallocz(sizeof(*video_enc->intra_matrix) * 64))) {
@@ -2660,7 +2614,6 @@ loop_end:
         /* set the filter output constraints */
         if (ost->filter) {
             OutputFilter *f = ost->filter;
-            int count;
             switch (ost->enc_ctx->codec_type) {
             case AVMEDIA_TYPE_VIDEO:
                 f->frame_rate = ost->frame_rate;
@@ -2668,51 +2621,25 @@ loop_end:
                 f->height     = ost->enc_ctx->height;
                 if (ost->enc_ctx->pix_fmt != AV_PIX_FMT_NONE) {
                     f->format = ost->enc_ctx->pix_fmt;
-                } else if (ost->enc->pix_fmts) {
-                    count = 0;
-                    while (ost->enc->pix_fmts[count] != AV_PIX_FMT_NONE)
-                        count++;
-                    f->formats = av_calloc(count + 1, sizeof(*f->formats));
-                    if (!f->formats)
-                        exit_program(1);
-                    memcpy(f->formats, ost->enc->pix_fmts, (count + 1) * sizeof(*f->formats));
+                } else {
+                    f->formats = ost->enc->pix_fmts;
                 }
                 break;
             case AVMEDIA_TYPE_AUDIO:
                 if (ost->enc_ctx->sample_fmt != AV_SAMPLE_FMT_NONE) {
                     f->format = ost->enc_ctx->sample_fmt;
-                } else if (ost->enc->sample_fmts) {
-                    count = 0;
-                    while (ost->enc->sample_fmts[count] != AV_SAMPLE_FMT_NONE)
-                        count++;
-                    f->formats = av_calloc(count + 1, sizeof(*f->formats));
-                    if (!f->formats)
-                        exit_program(1);
-                    memcpy(f->formats, ost->enc->sample_fmts, (count + 1) * sizeof(*f->formats));
+                } else {
+                    f->formats = ost->enc->sample_fmts;
                 }
                 if (ost->enc_ctx->sample_rate) {
                     f->sample_rate = ost->enc_ctx->sample_rate;
-                } else if (ost->enc->supported_samplerates) {
-                    count = 0;
-                    while (ost->enc->supported_samplerates[count])
-                        count++;
-                    f->sample_rates = av_calloc(count + 1, sizeof(*f->sample_rates));
-                    if (!f->sample_rates)
-                        exit_program(1);
-                    memcpy(f->sample_rates, ost->enc->supported_samplerates,
-                           (count + 1) * sizeof(*f->sample_rates));
+                } else {
+                    f->sample_rates = ost->enc->supported_samplerates;
                 }
                 if (ost->enc_ctx->channels) {
                     f->channel_layout = av_get_default_channel_layout(ost->enc_ctx->channels);
-                } else if (ost->enc->channel_layouts) {
-                    count = 0;
-                    while (ost->enc->channel_layouts[count])
-                        count++;
-                    f->channel_layouts = av_calloc(count + 1, sizeof(*f->channel_layouts));
-                    if (!f->channel_layouts)
-                        exit_program(1);
-                    memcpy(f->channel_layouts, ost->enc->channel_layouts,
-                           (count + 1) * sizeof(*f->channel_layouts));
+                } else {
+                    f->channel_layouts = ost->enc->channel_layouts;
                 }
                 break;
             }
@@ -3776,8 +3703,6 @@ const OptionDef options[] = {
         "set pixel format", "format" },
     { "bits_per_raw_sample", OPT_VIDEO | OPT_INT | HAS_ARG,                      { &frame_bits_per_raw_sample },
         "set the number of bits per raw sample", "number" },
-    { "intra",        OPT_VIDEO | OPT_BOOL | OPT_EXPERT,                         { &intra_only },
-        "deprecated use -g 1" },
     { "vn",           OPT_VIDEO | OPT_BOOL  | OPT_OFFSET | OPT_INPUT | OPT_OUTPUT,{ .off = OFFSET(video_disable) },
         "disable video" },
     { "rc_override",  OPT_VIDEO | HAS_ARG | OPT_EXPERT  | OPT_STRING | OPT_SPEC |
@@ -3786,10 +3711,6 @@ const OptionDef options[] = {
     { "vcodec",       OPT_VIDEO | HAS_ARG  | OPT_PERFILE | OPT_INPUT |
                       OPT_OUTPUT,                                                { .func_arg = opt_video_codec },
         "force video codec ('copy' to copy stream)", "codec" },
-    { "sameq",        OPT_VIDEO | OPT_EXPERT ,                                   { .func_arg = opt_sameq },
-        "Removed" },
-    { "same_quant",   OPT_VIDEO | OPT_EXPERT ,                                   { .func_arg = opt_sameq },
-        "Removed" },
     { "timecode",     OPT_VIDEO | HAS_ARG | OPT_PERFILE | OPT_OUTPUT,            { .func_arg = opt_timecode },
         "set initial TimeCode value.", "hh:mm:ss[:;.]ff" },
     { "pass",         OPT_VIDEO | HAS_ARG | OPT_SPEC | OPT_INT | OPT_OUTPUT,     { .off = OFFSET(pass) },
@@ -3797,8 +3718,6 @@ const OptionDef options[] = {
     { "passlogfile",  OPT_VIDEO | HAS_ARG | OPT_STRING | OPT_EXPERT | OPT_SPEC |
                       OPT_OUTPUT,                                                { .off = OFFSET(passlogfiles) },
         "select two pass log file name prefix", "prefix" },
-    { "deinterlace",  OPT_VIDEO | OPT_BOOL | OPT_EXPERT,                         { &do_deinterlace },
-        "this option is deprecated, use the yadif filter instead" },
     { "psnr",         OPT_VIDEO | OPT_BOOL | OPT_EXPERT,                         { &do_psnr },
         "calculate PSNR of compressed frames" },
     { "vstats",       OPT_VIDEO | OPT_EXPERT ,                                   { .func_arg = opt_vstats },
@@ -3848,9 +3767,6 @@ const OptionDef options[] = {
     { "hwaccel_output_format", OPT_VIDEO | OPT_STRING | HAS_ARG | OPT_EXPERT |
                           OPT_SPEC | OPT_INPUT,                                  { .off = OFFSET(hwaccel_output_formats) },
         "select output format used with HW accelerated decoding", "format" },
-#if CONFIG_VIDEOTOOLBOX
-    { "videotoolbox_pixfmt", HAS_ARG | OPT_STRING | OPT_EXPERT, { &videotoolbox_pixfmt}, "" },
-#endif
     { "hwaccels",         OPT_EXIT,                                              { .func_arg = show_hwaccels },
         "show available HW acceleration methods" },
     { "autorotate",       HAS_ARG | OPT_BOOL | OPT_SPEC |
@@ -3903,13 +3819,6 @@ const OptionDef options[] = {
         "fix subtitles duration" },
     { "canvas_size", OPT_SUBTITLE | HAS_ARG | OPT_STRING | OPT_SPEC | OPT_INPUT, { .off = OFFSET(canvas_sizes) },
         "set canvas size (WxH or abbreviation)", "size" },
-
-    /* grab options */
-    { "vc", HAS_ARG | OPT_EXPERT | OPT_VIDEO, { .func_arg = opt_video_channel },
-        "deprecated, use -channel", "channel" },
-    { "tvstd", HAS_ARG | OPT_EXPERT | OPT_VIDEO, { .func_arg = opt_video_standard },
-        "deprecated, use -standard", "standard" },
-    { "isync", OPT_BOOL | OPT_EXPERT, { &input_sync }, "this option is deprecated and does nothing", "" },
 
     /* muxer options */
     { "muxdelay",   OPT_FLOAT | HAS_ARG | OPT_EXPERT | OPT_OFFSET | OPT_OUTPUT, { .off = OFFSET(mux_max_delay) },

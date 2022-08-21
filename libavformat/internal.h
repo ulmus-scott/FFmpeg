@@ -82,6 +82,12 @@ typedef struct FFFormatContext {
     int nb_interleaved_streams;
 
     /**
+     * The interleavement function in use. Always set for muxers.
+     */
+    int (*interleave_packet)(struct AVFormatContext *s, AVPacket *pkt,
+                             int flush, int has_packet);
+
+    /**
      * This buffer is only needed when packets were already buffered but
      * not decoded, for example to get the codec parameters in MPEG
      * streams.
@@ -752,6 +758,13 @@ int ff_add_attached_pic(AVFormatContext *s, AVStream *st, AVIOContext *pb,
  */
 int ff_interleave_packet_per_dts(AVFormatContext *s, AVPacket *pkt,
                                  int flush, int has_packet);
+
+/**
+ * Interleave packets directly in the order in which they arrive
+ * without any sort of buffering.
+ */
+int ff_interleave_packet_passthrough(AVFormatContext *s, AVPacket *pkt,
+                                     int flush, int has_packet);
 
 void ff_free_stream(AVFormatContext *s, AVStream *st);
 

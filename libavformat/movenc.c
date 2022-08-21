@@ -2434,7 +2434,7 @@ static int mov_write_stsd_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContext
 static int mov_write_ctts_tag(AVFormatContext *s, AVIOContext *pb, MOVTrack *track)
 {
     MOVMuxContext *mov = s->priv_data;
-    MOVStts *ctts_entries;
+    MOVCtts *ctts_entries;
     uint32_t entries = 0;
     uint32_t atom_size;
     int i;
@@ -6458,8 +6458,6 @@ static void mov_free(AVFormatContext *s)
     MOVMuxContext *mov = s->priv_data;
     int i;
 
-    av_packet_free(&mov->pkt);
-
     if (!mov->tracks)
         return;
 
@@ -6569,6 +6567,7 @@ static int mov_init(AVFormatContext *s)
     int i, ret;
 
     mov->fc = s;
+    mov->pkt = ffformatcontext(s)->pkt;
 
     /* Default mode == MP4 */
     mov->mode = MODE_MP4;
@@ -6713,10 +6712,6 @@ static int mov_init(AVFormatContext *s)
 
         mov->nb_streams += mov->nb_meta_tmcd;
     }
-
-    mov->pkt = av_packet_alloc();
-    if (!mov->pkt)
-        return AVERROR(ENOMEM);
 
     // Reserve an extra stream for chapters for the case where chapters
     // are written in the trailer
@@ -7343,10 +7338,10 @@ static int mov_write_trailer(AVFormatContext *s)
     return res;
 }
 
-static int mov_check_bitstream(struct AVFormatContext *s, const AVPacket *pkt)
+static int mov_check_bitstream(AVFormatContext *s, AVStream *st,
+                               const AVPacket *pkt)
 {
     int ret = 1;
-    AVStream *st = s->streams[pkt->stream_index];
 
     if (st->codecpar->codec_id == AV_CODEC_ID_AAC) {
         if (pkt->size > 2 && (AV_RB16(pkt->data) & 0xfff0) == 0xfff0)

@@ -555,9 +555,6 @@ static void ffmpeg_cleanup(int ret)
 
             avfilter_inout_free(&ofilter->out_tmp);
             av_freep(&ofilter->name);
-            av_freep(&ofilter->formats);
-            av_freep(&ofilter->channel_layouts);
-            av_freep(&ofilter->sample_rates);
             av_freep(&fg->outputs[j]);
         }
         av_freep(&fg->outputs);
@@ -633,7 +630,6 @@ static void ffmpeg_cleanup(int ret)
         InputStream *ist = input_streams[i];
 
         av_frame_free(&ist->decoded_frame);
-        av_frame_free(&ist->filter_frame);
         av_packet_free(&ist->pkt);
         av_dict_free(&ist->decoder_opts);
         avsubtitle_free(&ist->prev_sub.subtitle);
@@ -754,14 +750,13 @@ static void write_packet(OutputFile *of, AVPacket *pkt, OutputStream *ost, int u
         AVPacket *tmp_pkt;
         /* the muxer is not initialized yet, buffer the packet */
         if (!av_fifo_space(ost->muxing_queue)) {
+            size_t cur_size = av_fifo_size(ost->muxing_queue);
             unsigned int are_we_over_size =
                 (ost->muxing_queue_data_size + pkt->size) > ost->muxing_queue_data_threshold;
-            int new_size = are_we_over_size ?
-                           FFMIN(2 * av_fifo_size(ost->muxing_queue),
-                                 ost->max_muxing_queue_size) :
-                           2 * av_fifo_size(ost->muxing_queue);
+            size_t limit    = are_we_over_size ? ost->max_muxing_queue_size : INT_MAX;
+            size_t new_size = FFMIN(2 * cur_size, limit);
 
-            if (new_size <= av_fifo_size(ost->muxing_queue)) {
+            if (new_size <= cur_size) {
                 av_log(NULL, AV_LOG_ERROR,
                        "Too many packets buffered for output stream %d:%d.\n",
                        ost->file_index, ost->st->index);
@@ -2171,11 +2166,15 @@ static int ifilter_has_all_input_formats(FilterGraph *fg)
     return 1;
 }
 
-static int ifilter_send_frame(InputFilter *ifilter, AVFrame *frame)
+static int ifilter_send_frame(InputFilter *ifilter, AVFrame *frame, int keep_reference)
 {
     FilterGraph *fg = ifilter->graph;
     AVFrameSideData *sd;
     int need_reinit, ret;
+    int buffersrc_flags = AV_BUFFERSRC_FLAG_PUSH;
+
+    if (keep_reference)
+        buffersrc_flags |= AV_BUFFERSRC_FLAG_KEEP_REF;
 
     /* determine if the parameters for this input changed */
     need_reinit = ifilter->format != frame->format;
@@ -2217,7 +2216,6 @@ static int ifilter_send_frame(InputFilter *ifilter, AVFrame *frame)
             AVFrame *tmp = av_frame_clone(frame);
             if (!tmp)
                 return AVERROR(ENOMEM);
-            av_frame_unref(frame);
 
             if (!av_fifo_space(ifilter->frame_queue)) {
                 ret = av_fifo_realloc2(ifilter->frame_queue, 2 * av_fifo_size(ifilter->frame_queue));
@@ -2243,7 +2241,7 @@ static int ifilter_send_frame(InputFilter *ifilter, AVFrame *frame)
         }
     }
 
-    ret = av_buffersrc_add_frame_flags(ifilter->filter, frame, AV_BUFFERSRC_FLAG_PUSH);
+    ret = av_buffersrc_add_frame_flags(ifilter->filter, frame, buffersrc_flags);
     if (ret < 0) {
         if (ret != AVERROR_EOF)
             av_log(NULL, AV_LOG_ERROR, "Error while filtering: %s\n", av_err2str(ret));
@@ -2306,18 +2304,10 @@ static int decode(AVCodecContext *avctx, AVFrame *frame, int *got_frame, AVPacke
 static int send_frame_to_filters(InputStream *ist, AVFrame *decoded_frame)
 {
     int i, ret;
-    AVFrame *f;
 
     av_assert1(ist->nb_filters > 0); /* ensure ret is initialized */
     for (i = 0; i < ist->nb_filters; i++) {
-        if (i < ist->nb_filters - 1) {
-            f = ist->filter_frame;
-            ret = av_frame_ref(f, decoded_frame);
-            if (ret < 0)
-                break;
-        } else
-            f = decoded_frame;
-        ret = ifilter_send_frame(ist->filters[i], f);
+        ret = ifilter_send_frame(ist->filters[i], decoded_frame, i < ist->nb_filters - 1);
         if (ret == AVERROR_EOF)
             ret = 0; /* ignore */
         if (ret < 0) {
@@ -2385,7 +2375,6 @@ static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output,
     ist->nb_samples = decoded_frame->nb_samples;
     err = send_frame_to_filters(ist, decoded_frame);
 
-    av_frame_unref(ist->filter_frame);
     av_frame_unref(decoded_frame);
     return err < 0 ? err : ret;
 }
@@ -2511,7 +2500,6 @@ static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output, int64_
     err = send_frame_to_filters(ist, decoded_frame);
 
 fail:
-    av_frame_unref(ist->filter_frame);
     av_frame_unref(decoded_frame);
     return err < 0 ? err : ret;
 }
@@ -2867,12 +2855,7 @@ static enum AVPixelFormat get_format(AVCodecContext *s, const enum AVPixelFormat
                     break;
             }
         }
-        if (config) {
-            if (config->device_type != ist->hwaccel_device_type) {
-                // Different hwaccel offered, ignore.
-                continue;
-            }
-
+        if (config && config->device_type == ist->hwaccel_device_type) {
             ret = hwaccel_decode_init(s);
             if (ret < 0) {
                 if (ist->hwaccel_id == HWACCEL_GENERIC) {
@@ -2885,55 +2868,13 @@ static enum AVPixelFormat get_format(AVCodecContext *s, const enum AVPixelFormat
                 }
                 continue;
             }
-        } else {
-            const HWAccel *hwaccel = NULL;
-            int i;
-            for (i = 0; hwaccels[i].name; i++) {
-                if (hwaccels[i].pix_fmt == *p) {
-                    hwaccel = &hwaccels[i];
-                    break;
-                }
-            }
-            if (!hwaccel) {
-                // No hwaccel supporting this pixfmt.
-                continue;
-            }
-            if (hwaccel->id != ist->hwaccel_id) {
-                // Does not match requested hwaccel.
-                continue;
-            }
 
-            ret = hwaccel->init(s);
-            if (ret < 0) {
-                av_log(NULL, AV_LOG_FATAL,
-                       "%s hwaccel requested for input stream #%d:%d, "
-                       "but cannot be initialized.\n", hwaccel->name,
-                       ist->file_index, ist->st->index);
-                return AV_PIX_FMT_NONE;
-            }
+            ist->hwaccel_pix_fmt = *p;
+            break;
         }
-
-        if (ist->hw_frames_ctx) {
-            s->hw_frames_ctx = av_buffer_ref(ist->hw_frames_ctx);
-            if (!s->hw_frames_ctx)
-                return AV_PIX_FMT_NONE;
-        }
-
-        ist->hwaccel_pix_fmt = *p;
-        break;
     }
 
     return *p;
-}
-
-static int get_buffer(AVCodecContext *s, AVFrame *frame, int flags)
-{
-    InputStream *ist = s->opaque;
-
-    if (ist->hwaccel_get_buffer && frame->format == ist->hwaccel_pix_fmt)
-        return ist->hwaccel_get_buffer(s, frame, flags);
-
-    return avcodec_default_get_buffer2(s, frame, flags);
 }
 
 static int init_input_stream(int ist_index, char *error, int error_len)
@@ -2951,7 +2892,6 @@ static int init_input_stream(int ist_index, char *error, int error_len)
 
         ist->dec_ctx->opaque                = ist;
         ist->dec_ctx->get_format            = get_format;
-        ist->dec_ctx->get_buffer2           = get_buffer;
 #if LIBAVCODEC_VERSION_MAJOR < 60
 FF_DISABLE_DEPRECATION_WARNINGS
         ist->dec_ctx->thread_safe_callbacks = 1;
@@ -3350,15 +3290,8 @@ static int init_output_stream_encode(OutputStream *ost, AVFrame *frame)
 
     set_encoder_id(output_files[ost->file_index], ost);
 
-    // Muxers use AV_PKT_DATA_DISPLAYMATRIX to signal rotation. On the other
-    // hand, the legacy API makes demuxers set "rotate" metadata entries,
-    // which have to be filtered out to prevent leaking them to output files.
-    av_dict_set(&ost->st->metadata, "rotate", NULL, 0);
-
     if (ist) {
         dec_ctx = ist->dec_ctx;
-
-        enc_ctx->chroma_sample_location = dec_ctx->chroma_sample_location;
     }
 
     if (enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {

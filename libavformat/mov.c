@@ -77,7 +77,7 @@ typedef struct MOVParseTableEntry {
 
 static int mov_read_default(MOVContext *c, AVIOContext *pb, MOVAtom atom);
 static int mov_read_mfra(MOVContext *c, AVIOContext *f);
-static int64_t add_ctts_entry(MOVStts** ctts_data, unsigned int* ctts_count, unsigned int* allocated_size,
+static int64_t add_ctts_entry(MOVCtts** ctts_data, unsigned int* ctts_count, unsigned int* allocated_size,
                               int count, int duration);
 
 static int mov_metadata_track_or_disc_number(MOVContext *c, AVIOContext *pb,
@@ -2538,6 +2538,10 @@ int ff_mov_read_stsd_entries(MOVContext *c, AVIOContext *pb, int entries)
                 av_log(c->fc, AV_LOG_ERROR, "Invalid sample rate %d\n", st->codecpar->sample_rate);
                 return AVERROR_INVALIDDATA;
             }
+            if (st->codecpar->channels < 0) {
+                av_log(c->fc, AV_LOG_ERROR, "Invalid channels %d\n", st->codecpar->channels);
+                return AVERROR_INVALIDDATA;
+            }
         } else if (st->codecpar->codec_type==AVMEDIA_TYPE_SUBTITLE){
             mov_parse_stsd_subtitle(c, pb, st, sc,
                                     size - (avio_tell(pb) - start_pos));
@@ -2938,7 +2942,7 @@ static int mov_read_stts(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         return AVERROR(ENOMEM);
 
     for (i = 0; i < entries && !pb->eof_reached; i++) {
-        int sample_duration;
+        unsigned int sample_duration;
         unsigned int sample_count;
         unsigned int min_entries = FFMIN(FFMAX(i + 1, 1024 * 1024), entries);
         MOVStts *stts_data = av_fast_realloc(sc->stts_data, &alloc_size,
@@ -3191,7 +3195,7 @@ static int get_edit_list_entry(MOVContext *mov,
 static int find_prev_closest_index(AVStream *st,
                                    AVIndexEntry *e_old,
                                    int nb_old,
-                                   MOVStts* ctts_data,
+                                   MOVCtts* ctts_data,
                                    int64_t ctts_count,
                                    int64_t timestamp_pts,
                                    int flag,
@@ -3342,17 +3346,17 @@ static void fix_index_entry_timestamps(AVStream* st, int end_index, int64_t end_
  * Append a new ctts entry to ctts_data.
  * Returns the new ctts_count if successful, else returns -1.
  */
-static int64_t add_ctts_entry(MOVStts** ctts_data, unsigned int* ctts_count, unsigned int* allocated_size,
+static int64_t add_ctts_entry(MOVCtts** ctts_data, unsigned int* ctts_count, unsigned int* allocated_size,
                               int count, int duration)
 {
-    MOVStts *ctts_buf_new;
-    const size_t min_size_needed = (*ctts_count + 1) * sizeof(MOVStts);
+    MOVCtts *ctts_buf_new;
+    const size_t min_size_needed = (*ctts_count + 1) * sizeof(MOVCtts);
     const size_t requested_size =
         min_size_needed > *allocated_size ?
         FFMAX(min_size_needed, 2 * (*allocated_size)) :
         min_size_needed;
 
-    if ((unsigned)(*ctts_count) >= UINT_MAX / sizeof(MOVStts) - 1)
+    if ((unsigned)(*ctts_count) >= UINT_MAX / sizeof(MOVCtts) - 1)
         return -1;
 
     ctts_buf_new = av_fast_realloc(*ctts_data, allocated_size, requested_size);
@@ -3486,7 +3490,7 @@ static void mov_fix_index(MOVContext *mov, AVStream *st)
     int nb_old = sti->nb_index_entries;
     const AVIndexEntry *e_old_end = e_old + nb_old;
     const AVIndexEntry *current = NULL;
-    MOVStts *ctts_data_old = msc->ctts_data;
+    MOVCtts *ctts_data_old = msc->ctts_data;
     int64_t ctts_index_old = 0;
     int64_t ctts_sample_old = 0;
     int64_t ctts_count_old = msc->ctts_count;
@@ -3793,7 +3797,7 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
     unsigned int stps_index = 0;
     unsigned int i, j;
     uint64_t stream_size = 0;
-    MOVStts *ctts_data_old = sc->ctts_data;
+    MOVCtts *ctts_data_old = sc->ctts_data;
     unsigned int ctts_count_old = sc->ctts_count;
 
     if (sc->elst_count) {
@@ -4754,7 +4758,7 @@ static int mov_read_trun(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     AVStream *st = NULL;
     FFStream *sti = NULL;
     MOVStreamContext *sc;
-    MOVStts *ctts_data;
+    MOVCtts *ctts_data;
     uint64_t offset;
     int64_t dts, pts = AV_NOPTS_VALUE;
     int data_offset = 0;

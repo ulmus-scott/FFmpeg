@@ -74,6 +74,9 @@ static const struct profile_names hevc_profiles[] = {
     { MFX_PROFILE_HEVC_MAINSP,                  "hevc mainsp"                },
     { MFX_PROFILE_HEVC_REXT,                    "hevc rext"                  },
 #endif
+#if QSV_VERSION_ATLEAST(1, 32)
+    { MFX_PROFILE_HEVC_SCC,                     "hevc scc"                   },
+#endif
 };
 
 static const struct profile_names vp9_profiles[] = {
@@ -578,7 +581,9 @@ static int init_video_param_jpeg(AVCodecContext *avctx, QSVEncContext *q)
     if (!desc)
         return AVERROR_BUG;
 
-    ff_qsv_map_pixfmt(sw_format, &q->param.mfx.FrameInfo.FourCC);
+    ret = ff_qsv_map_pixfmt(sw_format, &q->param.mfx.FrameInfo.FourCC);
+    if (ret < 0)
+        return AVERROR_BUG;
 
     q->param.mfx.FrameInfo.CropX          = 0;
     q->param.mfx.FrameInfo.CropY          = 0;
@@ -681,7 +686,9 @@ static int init_video_param(AVCodecContext *avctx, QSVEncContext *q)
     if (!desc)
         return AVERROR_BUG;
 
-    ff_qsv_map_pixfmt(sw_format, &q->param.mfx.FrameInfo.FourCC);
+    ret = ff_qsv_map_pixfmt(sw_format, &q->param.mfx.FrameInfo.FourCC);
+    if (ret < 0)
+        return AVERROR_BUG;
 
     q->param.mfx.FrameInfo.CropX          = 0;
     q->param.mfx.FrameInfo.CropY          = 0;

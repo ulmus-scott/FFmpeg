@@ -3411,12 +3411,15 @@ an internal session.
 Depth of look ahead in number frames, available when extbrc option is enabled.
 
 @item @var{profile}
+Set the encoding profile (scc requires libmfx >= 1.32).
+
 @table @samp
 @item unknown
 @item main
 @item main10
 @item mainsp
 @item rext
+@item scc
 @end table
 
 @item @var{gpb}
@@ -3432,6 +3435,9 @@ Number of rows for tiled encoding.
 
 @item @var{aud}
 Insert the Access Unit Delimiter NAL.
+
+@item @var{pic_timing_sei}
+Insert picture timing SEI with pic_struct_syntax element.
 @end table
 
 @subsection MPEG2 Options

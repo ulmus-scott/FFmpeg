@@ -296,7 +296,6 @@ static av_cold int dss_sp_decode_init(AVCodecContext *avctx)
     avctx->channels       = 1;
     avctx->sample_rate    = 11025;
 
-    memset(p->history, 0, sizeof(p->history));
     p->pulse_dec_mode = 1;
     p->avctx          = avctx;
 
@@ -783,4 +782,5 @@ const AVCodec ff_dss_sp_decoder = {
     .init           = dss_sp_decode_init,
     .decode         = dss_sp_decode_frame,
     .capabilities   = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_CHANNEL_CONF,
+    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

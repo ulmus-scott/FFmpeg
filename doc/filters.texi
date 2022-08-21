@@ -12341,10 +12341,10 @@ constants:
 @item source_fps
 The input's frame rate
 
-@item ntsc, qntsc, sntsc
+@item ntsc
 NTSC frame rate of @code{30000/1001}
 
-@item pal, qpal, spal
+@item pal
 PAL frame rate of @code{25.0}
 
 @item film
@@ -20975,6 +20975,9 @@ If diagonal field of view is set it overrides horizontal and vertical field of v
 
 @item octahedron
 Octahedron projection.
+
+@item cylindricalea
+Cylindrical Equal Area projection.
 @end table
 
 @item interp

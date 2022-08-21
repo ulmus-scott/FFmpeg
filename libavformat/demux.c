@@ -319,8 +319,8 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
                 goto close;
         } else
             av_log(s, AV_LOG_DEBUG, "demuxer does not support additional id3 data, skipping\n");
+        ff_id3v2_free_extra_meta(&id3v2_extra_meta);
     }
-    ff_id3v2_free_extra_meta(&id3v2_extra_meta);
 
     if ((ret = avformat_queue_attached_pictures(s)) < 0)
         goto close;
@@ -1749,7 +1749,7 @@ static void estimate_timings_from_pts(AVFormatContext *ic, int64_t old_offset)
         goto skip_duration_calc;
     }
 
-    av_opt_set(ic, "skip_changes", "1", AV_OPT_SEARCH_CHILDREN);
+    av_opt_set_int(ic, "skip_changes", 1, AV_OPT_SEARCH_CHILDREN);
     /* estimate the end time (duration) */
     /* XXX: may need to support wrapping */
     filesize = ic->pb ? avio_size(ic->pb) : 0;
@@ -1820,7 +1820,7 @@ static void estimate_timings_from_pts(AVFormatContext *ic, int64_t old_offset)
              offset &&
              ++retry <= DURATION_MAX_RETRY);
 
-    av_opt_set(ic, "skip_changes", "0", AV_OPT_SEARCH_CHILDREN);
+    av_opt_set_int(ic, "skip_changes", 0, AV_OPT_SEARCH_CHILDREN);
 
     /* warn about audio/video streams which duration could not be estimated */
     for (unsigned i = 0; i < ic->nb_streams; i++) {
@@ -2438,7 +2438,7 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
 
     flush_codecs = probesize > 0;
 
-    av_opt_set(ic, "skip_clear", "1", AV_OPT_SEARCH_CHILDREN);
+    av_opt_set_int(ic, "skip_clear", 1, AV_OPT_SEARCH_CHILDREN);
 
     max_stream_analyze_duration = max_analyze_duration;
     max_subtitle_analyze_duration = max_analyze_duration;
@@ -2926,7 +2926,7 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
     if (probesize)
         estimate_timings(ic, old_offset);
 
-    av_opt_set(ic, "skip_clear", "0", AV_OPT_SEARCH_CHILDREN);
+    av_opt_set_int(ic, "skip_clear", 0, AV_OPT_SEARCH_CHILDREN);
 
     if (ret >= 0 && ic->nb_streams)
         /* We could not have all the codec parameters before EOF. */

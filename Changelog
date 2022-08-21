@@ -21,6 +21,8 @@ version <next>:
 - scharr video filter
 - apsyclip audio filter
 - morpho video filter
+- amr parser
+- (a)latency filters
 
 
 version 4.4:

@@ -130,8 +130,8 @@ void avfilter_graph_free(AVFilterGraph **graph)
 
     av_freep(&(*graph)->sink_links);
 
-    av_freep(&(*graph)->scale_sws_opts);
-    av_freep(&(*graph)->aresample_swr_opts);
+    av_opt_free(*graph);
+
     av_freep(&(*graph)->filters);
     av_freep(&(*graph)->internal);
     av_freep(graph);
@@ -154,8 +154,7 @@ int avfilter_graph_create_filter(AVFilterContext **filt_ctx, const AVFilter *fil
     return 0;
 
 fail:
-    if (*filt_ctx)
-        avfilter_free(*filt_ctx);
+    avfilter_free(*filt_ctx);
     *filt_ctx = NULL;
     return ret;
 }
@@ -183,17 +182,15 @@ AVFilterContext *avfilter_graph_alloc_filter(AVFilterGraph *graph,
         }
     }
 
+    filters = av_realloc_array(graph->filters, graph->nb_filters + 1, sizeof(*filters));
+    if (!filters)
+        return NULL;
+    graph->filters = filters;
+
     s = ff_filter_alloc(filter, name);
     if (!s)
         return NULL;
 
-    filters = av_realloc(graph->filters, sizeof(*filters) * (graph->nb_filters + 1));
-    if (!filters) {
-        avfilter_free(s);
-        return NULL;
-    }
-
-    graph->filters = filters;
     graph->filters[graph->nb_filters++] = s;
 
     s->graph = graph;

@@ -27,9 +27,7 @@
 #include "internal.h"
 #include "lrc.h"
 #include "metadata.h"
-#include "subtitles.h"
 #include "version.h"
-#include "libavutil/bprint.h"
 #include "libavutil/dict.h"
 #include "libavutil/log.h"
 #include "libavutil/macros.h"
@@ -79,7 +77,7 @@ static int lrc_write_header(AVFormatContext *s)
         avio_printf(s->pb, "[%s:%s]\n",
                     metadata_item->key, metadata_item->value);
     }
-    avio_printf(s->pb, "\n");
+    avio_w8(s->pb, '\n');
     return 0;
 }
 

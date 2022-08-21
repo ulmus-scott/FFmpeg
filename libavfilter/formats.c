@@ -58,7 +58,7 @@ do {                                                                       \
  * If check is set, nothing is modified and it is only checked whether
  * the formats are compatible.
  * If empty_allowed is set and one of a,b->nb is zero, the lists are
- * merged; otherwise, it is treated as error.
+ * merged; otherwise, 0 (for nonmergeability) is returned.
  */
 #define MERGE_FORMATS(a, b, fmts, nb, type, check, empty_allowed)          \
 do {                                                                       \
@@ -113,9 +113,9 @@ static int merge_formats_internal(AVFilterFormats *a, AVFilterFormats *b,
        To avoid that, pretend that there are no common formats to force the
        insertion of a conversion filter. */
     if (type == AVMEDIA_TYPE_VIDEO)
-        for (i = 0; i < a->nb_formats; i++)
+        for (i = 0; i < a->nb_formats; i++) {
+            const AVPixFmtDescriptor *const adesc = av_pix_fmt_desc_get(a->formats[i]);
             for (j = 0; j < b->nb_formats; j++) {
-                const AVPixFmtDescriptor *adesc = av_pix_fmt_desc_get(a->formats[i]);
                 const AVPixFmtDescriptor *bdesc = av_pix_fmt_desc_get(b->formats[j]);
                 alpha2 |= adesc->flags & bdesc->flags & AV_PIX_FMT_FLAG_ALPHA;
                 chroma2|= adesc->nb_components > 1 && bdesc->nb_components > 1;
@@ -124,6 +124,7 @@ static int merge_formats_internal(AVFilterFormats *a, AVFilterFormats *b,
                     chroma1|= adesc->nb_components > 1;
                 }
             }
+        }
 
     // If chroma or alpha can be lost through merging then do not merge
     if (alpha2 > alpha1 || chroma2 > chroma1)

@@ -1325,7 +1325,32 @@ Set window size. Allowed range is from 16 to 131072.
 Default is @code{4096}
 
 @item win_func
-Set window function. Default is @code{hann}.
+Set window function.
+
+It accepts the following values:
+@table @samp
+@item rect
+@item bartlett
+@item hann, hanning
+@item hamming
+@item blackman
+@item welch
+@item flattop
+@item bharris
+@item bnuttall
+@item bhann
+@item sine
+@item nuttall
+@item lanczos
+@item gauss
+@item tukey
+@item dolph
+@item cauchy
+@item parzen
+@item poisson
+@item bohman
+@end table
+Default is @code{hann}.
 
 @item overlap
 Set window overlap. If set to 1, the recommended overlap for selected
@@ -7531,22 +7556,27 @@ of @var{all_mode}. Default value is @code{normal}.
 Available values for component modes are:
 @table @samp
 @item addition
-@item grainmerge
 @item and
 @item average
+@item bleach
 @item burn
 @item darken
 @item difference
-@item grainextract
 @item divide
 @item dodge
-@item freeze
 @item exclusion
 @item extremity
+@item freeze
+@item geometric
 @item glow
+@item grainextract
+@item grainmerge
 @item hardlight
 @item hardmix
+@item hardoverlay
+@item harmonic
 @item heat
+@item interpolate
 @item lighten
 @item linearlight
 @item multiply
@@ -7561,6 +7591,7 @@ Available values for component modes are:
 @item screen
 @item softdifference
 @item softlight
+@item stain
 @item subtract
 @item vividlight
 @item xor
@@ -8153,6 +8184,9 @@ means. For example, some MPEG based codecs export motion vectors through the
 The filter accepts the following option:
 
 @table @option
+@item block
+Display block partition structure using the luma plane.
+
 @item mv
 Set motion vectors to visualize.
 
@@ -15374,6 +15408,9 @@ Set morphological transform to apply, can be:
 @item dilate
 @item open
 @item close
+@item gradient
+@item tophat
+@item blackhat
 @end table
 Default is @code{erode}.
 
@@ -25791,6 +25828,15 @@ Add flickering blur effect:
 select='if(gt(random(0), 0.2), 1, 2)':n=2 [tmp], boxblur=2:2, [tmp] interleave
 @end example
 @end itemize
+
+@section latency, alatency
+Measure filtering latency.
+
+Report previous filter filtering latency, delay in number of audio samples for audio filters
+or number of video frames for video filters.
+
+On end of input stream, filter will report min and max measured latency for previous running filter
+in filtergraph.
 
 @section metadata, ametadata
 

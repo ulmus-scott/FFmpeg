@@ -2026,6 +2026,7 @@ ARCH_LIST="
     parisc
     ppc
     ppc64
+    riscv
     s390
     sh4
     sparc
@@ -2328,6 +2329,10 @@ TYPES_LIST="
     kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ
     kCVImageBufferTransferFunction_ITU_R_2100_HLG
     kCVImageBufferTransferFunction_Linear
+    kCVImageBufferYCbCrMatrix_ITU_R_2020
+    kCVImageBufferColorPrimaries_ITU_R_2020
+    kCVImageBufferTransferFunction_ITU_R_2020
+    kCVImageBufferTransferFunction_SMPTE_ST_428_1
     socklen_t
     struct_addrinfo
     struct_group_source_req
@@ -2636,7 +2641,7 @@ for ext in $(filter_out mmx $ARCH_EXT_LIST_X86_SIMD); do
 done
 
 aligned_stack_if_any="aarch64 ppc x86"
-fast_64bit_if_any="aarch64 alpha ia64 mips64 parisc64 ppc64 sparc64 x86_64"
+fast_64bit_if_any="aarch64 alpha ia64 mips64 parisc64 ppc64 riscv64 sparc64 x86_64"
 fast_clz_if_any="aarch64 alpha avr32 mips ppc x86"
 fast_unaligned_if_any="aarch64 ppc x86"
 simd_align_16_if_any="altivec neon sse"
@@ -3090,6 +3095,7 @@ v4l2_m2m_deps="linux_videodev2_h sem_timedwait"
 
 hwupload_cuda_filter_deps="ffnvcodec"
 scale_npp_filter_deps="ffnvcodec libnpp"
+scale2ref_npp_filter_deps="ffnvcodec libnpp"
 scale_cuda_filter_deps="ffnvcodec"
 scale_cuda_filter_deps_any="cuda_nvcc cuda_llvm"
 thumbnail_cuda_filter_deps="ffnvcodec"
@@ -3363,6 +3369,7 @@ flac_demuxer_select="flac_parser"
 flv_muxer_select="aac_adtstoasc_bsf"
 gxf_muxer_select="pcm_rechunk_bsf"
 hds_muxer_select="flv_muxer"
+hls_demuxer_select="adts_header ac3_parser"
 hls_muxer_select="mpegts_muxer"
 hls_muxer_suggest="gcrypt openssl"
 image2_alias_pix_demuxer_select="image2_demuxer"
@@ -4946,6 +4953,9 @@ case "$arch" in
     "Power Macintosh"|ppc*|powerpc*)
         arch="ppc"
     ;;
+    riscv*)
+        arch="riscv"
+    ;;
     s390|s390x)
         arch="s390"
     ;;
@@ -5337,6 +5347,10 @@ case "$arch" in
     ;;
     ppc)
         check_64bit ppc ppc64
+        enabled shared && enable_weak pic
+    ;;
+    riscv)
+        check_64bit riscv32 riscv64
         enabled shared && enable_weak pic
     ;;
     s390)
@@ -6273,6 +6287,10 @@ enabled videotoolbox && {
     check_func_headers CoreVideo/CVImageBuffer.h kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ "-framework CoreVideo"
     check_func_headers CoreVideo/CVImageBuffer.h kCVImageBufferTransferFunction_ITU_R_2100_HLG "-framework CoreVideo"
     check_func_headers CoreVideo/CVImageBuffer.h kCVImageBufferTransferFunction_Linear "-framework CoreVideo"
+    check_func_headers CoreVideo/CVImageBuffer.h kCVImageBufferYCbCrMatrix_ITU_R_2020 "-framework CoreVideo"
+    check_func_headers CoreVideo/CVImageBuffer.h kCVImageBufferColorPrimaries_ITU_R_2020 "-framework CoreVideo"
+    check_func_headers CoreVideo/CVImageBuffer.h kCVImageBufferTransferFunction_ITU_R_2020 "-framework CoreVideo"
+    check_func_headers CoreVideo/CVImageBuffer.h kCVImageBufferTransferFunction_SMPTE_ST_428_1 "-framework CoreVideo"
 }
 
 check_struct "sys/time.h sys/resource.h" "struct rusage" ru_maxrss
@@ -6815,10 +6833,10 @@ enabled vdpau &&
 enabled crystalhd && check_lib crystalhd "stdint.h libcrystalhd/libcrystalhd_if.h" DtsCrystalHDVersion -lcrystalhd
 
 if enabled vulkan; then
-    require_pkg_config_cpp vulkan "vulkan >= 1.1.97" "vulkan/vulkan.h" "defined VK_VERSION_1_1" ||
-        require_cpp_condition vulkan "vulkan/vulkan.h" "defined VK_VERSION_1_1"
+    require_pkg_config_cpp vulkan "vulkan >= 1.2.189" "vulkan/vulkan.h" "defined VK_VERSION_1_2" ||
+        require_cpp_condition vulkan "vulkan/vulkan.h" "defined VK_VERSION_1_2"
     # vulkan_lib should be removed once glslang filters are updated
-    check_pkg_config vulkan_lib "vulkan >= 1.1.97" "vulkan/vulkan.h" vkCreateInstance
+    check_pkg_config vulkan_lib "vulkan >= 1.2.189" "vulkan/vulkan.h" vkCreateInstance
 fi
 
 if enabled x86; then

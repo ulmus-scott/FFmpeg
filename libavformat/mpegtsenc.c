@@ -1564,7 +1564,8 @@ static void mpegts_write_pes(AVFormatContext *s, AVStream *st,
             q = get_ts_payload_start(buf);
             ts_st->discontinuity = 0;
         }
-        if (key && is_start && pts != AV_NOPTS_VALUE) {
+        if (key && is_start && pts != AV_NOPTS_VALUE &&
+            !is_dvb_teletext /* adaptation+payload forbidden for teletext (ETSI EN 300 472 V1.3.1 4.1) */) {
             // set Random Access for key frames
             if (ts_st->pcr_period)
                 write_pcr = 1;
@@ -1852,12 +1853,12 @@ static int mpegts_write_packet_internal(AVFormatContext *s, AVPacket *pkt)
     if (side_data)
         stream_id = side_data[0];
 
-    if (ts->copyts < 1) {
-        if (!ts->first_dts_checked && dts != AV_NOPTS_VALUE) {
-            ts->first_pcr += dts * 300;
-            ts->first_dts_checked = 1;
-        }
+    if (!ts->first_dts_checked && dts != AV_NOPTS_VALUE) {
+        ts->first_pcr += dts * 300;
+        ts->first_dts_checked = 1;
+    }
 
+    if (ts->copyts < 1) {
         if (pts != AV_NOPTS_VALUE)
             pts += delay;
         if (dts != AV_NOPTS_VALUE)

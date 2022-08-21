@@ -4254,9 +4254,9 @@ static void fov_from_dfov(int format, float d_fov, float w, float h, float *h_fo
 
 static void set_dimensions(int *outw, int *outh, int w, int h, const AVPixFmtDescriptor *desc)
 {
-    outw[1] = outw[2] = FF_CEIL_RSHIFT(w, desc->log2_chroma_w);
+    outw[1] = outw[2] = AV_CEIL_RSHIFT(w, desc->log2_chroma_w);
     outw[0] = outw[3] = w;
-    outh[1] = outh[2] = FF_CEIL_RSHIFT(h, desc->log2_chroma_h);
+    outh[1] = outh[2] = AV_CEIL_RSHIFT(h, desc->log2_chroma_h);
     outh[0] = outh[3] = h;
 }
 
@@ -4961,7 +4961,8 @@ static int process_command(AVFilterContext *ctx, const char *cmd, const char *ar
     V360Context *s = ctx->priv;
     int ret;
 
-    s->yaw = s->pitch = s->roll = 0.f;
+    if (s->reset_rot <= 0)
+        s->yaw = s->pitch = s->roll = 0.f;
     if (s->reset_rot < 0)
         s->reset_rot = 0;
 

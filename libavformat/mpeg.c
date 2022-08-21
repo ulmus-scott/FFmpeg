@@ -629,7 +629,7 @@ skip:
         st->codecpar->sample_rate = 8000;
     }
     st->internal->request_probe     = request_probe;
-    st->need_parsing      = AVSTREAM_PARSE_FULL;
+    st->internal->need_parsing      = AVSTREAM_PARSE_FULL;
 
     /* notify the callback of the change in streams */
     if (s->streams_changed) {

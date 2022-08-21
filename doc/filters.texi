@@ -2556,6 +2556,13 @@ noise removed from input signal.
 
 This filter supports the all above options as @ref{commands}.
 
+@section asdr
+Measure Audio Signal-to-Distortion Ratio.
+
+This filter takes two audio streams for input, and outputs first
+audio stream.
+Results are in dB per channel at end of either input.
+
 @section asetnsamples
 
 Set the number of samples per each output audio frame.
@@ -3154,7 +3161,7 @@ ffmpeg -i INPUT -af atrim=end_sample=1000
 @end itemize
 
 @section axcorrelate
-Calculate normalized cross-correlation between two input audio streams.
+Calculate normalized windowed cross-correlation between two input audio streams.
 
 Resulted samples are always between -1 and 1 inclusive.
 If result is 1 it means two input samples are highly correlated in that selected segment.
@@ -18922,6 +18929,23 @@ Keep the same colorspace property (default).
 @item chroma-derived-nc
 @item chroma-derived-c
 @item ictcp
+@end table
+@end table
+
+@section sharpen_npp
+Use the NVIDIA Performance Primitives (libnpp) to perform image sharpening with
+border control.
+
+The following additional options are accepted:
+@table @option
+
+@item border_type
+Type of sampling to be used ad frame borders. One of the following:
+@table @option
+
+@item replicate
+Replicate pixel values.
+
 @end table
 @end table
 

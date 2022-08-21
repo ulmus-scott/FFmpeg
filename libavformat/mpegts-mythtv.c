@@ -214,6 +214,7 @@ struct MpegTSContext {
 
     int resync_size;
     int merge_pmt_versions;
+    int max_packet_size;
 
     /******************************************/
     /* private mpegts data */
@@ -260,6 +261,8 @@ static const AVOption options[] = {
      {.i64 = 0}, 0, 1, 0 },
     {"skip_clear", "skip clearing programs", offsetof(MpegTSContext, skip_clear), AV_OPT_TYPE_BOOL,
      {.i64 = 0}, 0, 1, 0 },
+    {"max_packet_size", "maximum size of emitted packet", offsetof(MpegTSContext, max_packet_size), AV_OPT_TYPE_INT,
+     {.i64 = 204800}, 1, INT_MAX/2, AV_OPT_FLAG_DECODING_PARAM },
     { NULL },
 };
 
@@ -316,7 +319,7 @@ typedef struct PESContext {
     /* used to get the format */
     int data_index;
     int flags; /**< copied to the AVPacket flags */
-    int total_size;
+    int PES_packet_length;
     int pes_header_size;
     int extended_stream_id;
     uint8_t stream_id;
@@ -1106,8 +1109,8 @@ static int new_pes_packet(PESContext *pes, AVPacket *pkt)
     pkt->data = pes->buffer->data;
     pkt->size = pes->data_index;
 
-    if (pes->total_size != MAX_PES_PAYLOAD &&
-        pes->pes_header_size + pes->data_index != pes->total_size +
+    if (pes->PES_packet_length &&
+        pes->pes_header_size + pes->data_index != pes->PES_packet_length +
         PES_START_SIZE) {
         av_log(pes->stream, AV_LOG_WARNING, "PES packet size mismatch\n");
         pes->flags |= AV_PKT_FLAG_CORRUPT;
@@ -1218,7 +1221,7 @@ static AVBufferRef *buffer_pool_get(MpegTSContext *ts, int size)
 {
     int index = av_log2(size + AV_INPUT_BUFFER_PADDING_SIZE);
     if (!ts->pools[index]) {
-        int pool_size = FFMIN(MAX_PES_PAYLOAD + AV_INPUT_BUFFER_PADDING_SIZE, 2 << index);
+        int pool_size = FFMIN(ts->max_packet_size + AV_INPUT_BUFFER_PADDING_SIZE, 2 << index);
         ts->pools[index] = av_buffer_pool_init(pool_size, NULL);
         if (!ts->pools[index])
             return NULL;
@@ -1234,7 +1237,7 @@ static int mpegts_push_data(MpegTSFilter *filter,
     PESContext *pes   = filter->u.pes_filter.opaque;
     MpegTSContext *ts = pes->ts;
     const uint8_t *p;
-    int ret, len, code;
+    int ret, len;
 
     if (!ts->pkt)
         return 0;
@@ -1268,15 +1271,13 @@ static int mpegts_push_data(MpegTSFilter *filter,
                 if (pes->header[0] == 0x00 && pes->header[1] == 0x00 &&
                     pes->header[2] == 0x01) {
                     /* it must be an MPEG-2 PES stream */
-                    code = pes->header[3] | 0x100;
-                    av_log(pes->stream, AV_LOG_TRACE, "pid=%x pes_code=%#x\n", pes->pid,
-                            code);
                     pes->stream_id = pes->header[3];
+                    av_log(pes->stream, AV_LOG_TRACE, "pid=%x stream_id=%#x\n", pes->pid, pes->stream_id);
 
                     if ((pes->st && pes->st->discard == AVDISCARD_ALL &&
                          (!pes->sub_st ||
                           pes->sub_st->discard == AVDISCARD_ALL)) ||
-                        code == 0x1be) /* padding_stream */
+                        pes->stream_id == STREAM_ID_PADDING_STREAM)
                         goto skip;
 
                     /* stream not present in PMT */
@@ -1293,21 +1294,16 @@ static int mpegts_push_data(MpegTSFilter *filter,
                         mpegts_set_stream_info(pes->st, pes, 0, 0);
                     }
 
-                    pes->total_size = AV_RB16(pes->header + 4);
-                    /* NOTE: a zero total size means the PES size is
-                     * unbounded */
-                    if (!pes->total_size)
-                        pes->total_size = MAX_PES_PAYLOAD;
+                    pes->PES_packet_length = AV_RB16(pes->header + 4);
+                    /* NOTE: zero length means the PES size is unbounded */
 
-                    /* allocate pes buffer */
-                    pes->buffer = buffer_pool_get(ts, pes->total_size);
-                    if (!pes->buffer)
-                        return AVERROR(ENOMEM);
-
-                    if (code != 0x1bc && code != 0x1bf && /* program_stream_map, private_stream_2 */
-                        code != 0x1f0 && code != 0x1f1 && /* ECM, EMM */
-                        code != 0x1ff && code != 0x1f2 && /* program_stream_directory, DSMCC_stream */
-                        code != 0x1f8) {                  /* ITU-T Rec. H.222.1 type E stream */
+                    if (pes->stream_id != STREAM_ID_PROGRAM_STREAM_MAP &&
+                        pes->stream_id != STREAM_ID_PRIVATE_STREAM_2 &&
+                        pes->stream_id != STREAM_ID_ECM_STREAM &&
+                        pes->stream_id != STREAM_ID_EMM_STREAM &&
+                        pes->stream_id != STREAM_ID_PROGRAM_STREAM_DIRECTORY &&
+                        pes->stream_id != STREAM_ID_DSMCC_STREAM &&
+                        pes->stream_id != STREAM_ID_TYPE_E_STREAM) {
                         FFStream *const pes_sti = ffstream(pes->st);
                         pes->state = MPEGTS_PESHEADER;
                         if (pes->st->codecpar->codec_id == AV_CODEC_ID_NONE && !pes_sti->request_probe) {
@@ -1471,38 +1467,46 @@ skip:
             }
             break;
         case MPEGTS_PAYLOAD:
-            if (pes->buffer) {
+            do {
+                int max_packet_size = ts->max_packet_size;
+                if (pes->PES_packet_length && pes->PES_packet_length + PES_START_SIZE > pes->pes_header_size)
+                    max_packet_size = pes->PES_packet_length + PES_START_SIZE - pes->pes_header_size;
+
                 if (pes->data_index > 0 &&
-                    pes->data_index + buf_size > pes->total_size) {
+                    pes->data_index + buf_size > max_packet_size) {
                     ret = new_pes_packet(pes, ts->pkt);
                     if (ret < 0)
                         return ret;
-                    pes->total_size = MAX_PES_PAYLOAD;
-                    pes->buffer = buffer_pool_get(ts, pes->total_size);
-                    if (!pes->buffer)
-                        return AVERROR(ENOMEM);
+                    pes->PES_packet_length = 0;
+                    max_packet_size = ts->max_packet_size;
                     ts->stop_parse = 1;
                 } else if (pes->data_index == 0 &&
-                           buf_size > pes->total_size) {
+                           buf_size > max_packet_size) {
                     // pes packet size is < ts size packet and pes data is padded with 0xff
                     // not sure if this is legal in ts but see issue #2392
-                    buf_size = pes->total_size;
+                    buf_size = max_packet_size;
                 }
+
+                if (!pes->buffer) {
+                    pes->buffer = buffer_pool_get(ts, max_packet_size);
+                    if (!pes->buffer)
+                        return AVERROR(ENOMEM);
+                }
+
                 memcpy(pes->buffer->data + pes->data_index, p, buf_size);
                 pes->data_index += buf_size;
                 /* emit complete packets with known packet size
                  * decreases demuxer delay for infrequent packets like subtitles from
-                 * a couple of seconds to milliseconds for properly muxed files.
-                 * total_size is the number of bytes following pes_packet_length
-                 * in the pes header, i.e. not counting the first PES_START_SIZE bytes */
-                if (!ts->stop_parse && pes->total_size < MAX_PES_PAYLOAD &&
-                    pes->pes_header_size + pes->data_index == pes->total_size + PES_START_SIZE) {
+                 * a couple of seconds to milliseconds for properly muxed files. */
+                if (!ts->stop_parse && pes->PES_packet_length &&
+                    pes->pes_header_size + pes->data_index == pes->PES_packet_length + PES_START_SIZE) {
                     ts->stop_parse = 1;
                     ret = new_pes_packet(pes, ts->pkt);
+                    pes->state = MPEGTS_SKIP;
                     if (ret < 0)
                         return ret;
                 }
-            }
+            } while (0);
             buf_size = 0;
             break;
         case MPEGTS_SKIP:
@@ -3998,6 +4002,7 @@ MpegTSContext *avpriv_mpegts_parse_open(AVFormatContext *s)
         return NULL;
     /* no stream case, currently used by RTP */
     ts->raw_packet_size = TS_PACKET_SIZE;
+    ts->max_packet_size = 2048000;
     ts->stream = s;
     ts->auto_guess = 1;
 

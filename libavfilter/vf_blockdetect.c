@@ -60,11 +60,6 @@ static const AVOption blockdetect_options[] = {
 
 AVFILTER_DEFINE_CLASS(blockdetect);
 
-static av_cold int blockdetect_init(AVFilterContext *ctx)
-{
-    return 0;
-}
-
 static int blockdetect_config_input(AVFilterLink *inlink)
 {
     AVFilterContext *ctx = inlink->dst;
@@ -137,8 +132,10 @@ static float calculate_blockiness(BLKContext *s, int w, int h,
                 nonblock_count++;
             }
         }
-        temp = (block / block_count) / (nonblock / nonblock_count);
-        ret = FFMAX(ret, temp);
+        if (block_count && nonblock_count) {
+            temp = (block / block_count) / (nonblock / nonblock_count);
+            ret = FFMAX(ret, temp);
+        }
     }
 
     // vertical blockiness (fixed height)
@@ -180,8 +177,10 @@ static float calculate_blockiness(BLKContext *s, int w, int h,
                 nonblock_count++;
             }
         }
-        temp = (block / block_count) / (nonblock / nonblock_count);
-        ret = FFMAX(ret, temp);
+        if (block_count && nonblock_count) {
+            temp = (block / block_count) / (nonblock / nonblock_count);
+            ret = FFMAX(ret, temp);
+        }
     }
 
     // return highest value of horz||vert
@@ -284,7 +283,6 @@ const AVFilter ff_vf_blockdetect = {
     .name          = "blockdetect",
     .description   = NULL_IF_CONFIG_SMALL("Blockdetect filter."),
     .priv_size     = sizeof(BLKContext),
-    .init          = blockdetect_init,
     .uninit        = blockdetect_uninit,
     FILTER_PIXFMTS_ARRAY(pix_fmts),
     FILTER_INPUTS(blockdetect_inputs),

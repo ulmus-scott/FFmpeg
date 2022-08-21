@@ -745,6 +745,20 @@ Select overlap-save method. Not interpolated samples remain unchanged.
 Default value is @code{a}.
 @end table
 
+@section adecorrelate
+Apply decorrelation to input audio stream.
+
+The filter accepts the following options:
+
+@table @option
+@item stages
+Set decorrelation stages of filtering. Allowed
+range is from 1 to 16. Default value is 6.
+
+@item seed
+Set random seed used for setting delay in samples across channels.
+@end table
+
 @section adelay
 
 Delay one or more audio channels.
@@ -2974,6 +2988,35 @@ This filter supports the following commands:
 Change filter tempo scale factor.
 Syntax for the command is : "@var{tempo}"
 @end table
+
+@section atilt
+Apply spectral tilt filter to audio stream.
+
+This filter apply any spectral roll-off slope over any specified frequency band.
+
+The filter accepts the following options:
+
+@table @option
+@item freq
+Set central frequency of tilt in Hz. Default is 10000 Hz.
+
+@item slope
+Set slope direction of tilt. Default is 0. Allowed range is from -1 to 1.
+
+@item width
+Set width of tilt. Default is 1000. Allowed range is from 100 to 10000.
+
+@item order
+Set order of tilt filter.
+
+@item level
+Set input volume level. Allowed range is from 0 to 4.
+Defalt is 1.
+@end table
+
+@subsection Commands
+
+This filter supports the all above options as @ref{commands}.
 
 @section atrim
 
@@ -8235,7 +8278,15 @@ Default value is 1.
 
 @item analyze
 If set to anything other than @code{manual} it will analyze every frame and use derived
-parameters for filtering output frame. Can be @code{manual} or @code{average} or @code{minmax}.
+parameters for filtering output frame.
+
+Possible values are:
+@table @samp
+@item manual
+@item average
+@item minmax
+@item median
+@end table
 Default value is @code{manual}.
 @end table
 
@@ -9982,7 +10033,7 @@ Note that different backends use different file formats. TensorFlow and native
 backend can load files for only its format.
 @end table
 
-It can also be finished with @ref{dnn_processing} filter.
+To get full functionality (such as async execution), please use the @ref{dnn_processing} filter.
 
 @section deshake
 
@@ -10283,11 +10334,8 @@ and the second line is the name of label id 1, etc.
 The label id is considered as name if the label file is not provided.
 
 @item backend_configs
-Set the configs to be passed into backend
-
-@item async
-use DNN async execution if set (default: set),
-roll back to sync execution if the backend does not support async.
+Set the configs to be passed into backend. To use async execution, set async (default: set).
+Roll back to sync execution if the backend does not support async.
 
 @end table
 
@@ -10339,14 +10387,11 @@ Set the input name of the dnn network.
 Set the output name of the dnn network.
 
 @item backend_configs
-Set the configs to be passed into backend
+Set the configs to be passed into backend. To use async execution, set async (default: set).
+Roll back to sync execution if the backend does not support async.
 
 For tensorflow backend, you can set its configs with @option{sess_config} options,
 please use tools/python/tf_sess_config.py to get the configs of TensorFlow backend for your system.
-
-@item async
-use DNN async execution if set (default: set),
-roll back to sync execution if the backend does not support async.
 
 @end table
 
@@ -13045,6 +13090,18 @@ Display number of samples given out from filter.
 Set upper limit for video rate of output stream, Default value is @var{25}.
 This guarantee that output video frame rate will not be higher than this value.
 @end table
+
+@section grayworld
+A color constancy filter that applies color correction based on the grayworld assumption
+
+See: @url{https://www.researchgate.net/publication/275213614_A_New_Color_Correction_Method_for_Underwater_Imaging}
+
+The algorithm  uses linear light, so input
+data should be linearized beforehand (and possibly correctly tagged).
+
+@example
+ffmpeg -i INPUT -vf zscale=transfer=linear,grayworld,zscale=transfer=bt709,format=yuv420p OUTPUT
+@end example
 
 @section greyedge
 A color constancy variation filter which estimates scene illumination via grey edge algorithm
@@ -19353,7 +19410,7 @@ Default value is @code{2}. Scale factor is necessary for SRCNN model, because it
 input upscaled using bicubic upscaling with proper scale factor.
 @end table
 
-This feature can also be finished with @ref{dnn_processing} filter.
+To get full functionality (such as async execution), please use the @ref{dnn_processing} filter.
 
 @section ssim
 

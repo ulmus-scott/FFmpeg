@@ -12,6 +12,10 @@ version <next>:
 - audio and video segment filters
 - Apple Graphics (SMC) encoder
 - hsvkey and hsvhold video filters
+- adecorrelate audio filter
+- atilt audio filter
+- grayworld video filter
+- AV1 Low overhead bitstream format muxer
 
 
 version 4.4:

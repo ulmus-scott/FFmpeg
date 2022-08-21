@@ -876,11 +876,11 @@ static int determinable_frame_size(AVCodecContext *avctx)
 /**
  * Return the frame duration in seconds. Return 0 if not available.
  */
-void ff_compute_frame_duration(AVFormatContext *s, int *pnum, int *pden, AVStream *st,
-                               AVCodecParserContext *pc, AVPacket *pkt)
+static void compute_frame_duration(AVFormatContext *s, int *pnum, int *pden,
+                                   AVStream *st, AVCodecParserContext *pc,
+                                   AVPacket *pkt)
 {
-    AVRational codec_framerate = s->iformat ? st->internal->avctx->framerate :
-                                              av_mul_q(av_inv_q(st->internal->avctx->time_base), (AVRational){1, st->internal->avctx->ticks_per_frame});
+    AVRational codec_framerate = st->internal->avctx->framerate;
     int frame_size, sample_rate;
 
     *pnum = 0;
@@ -891,7 +891,7 @@ void ff_compute_frame_duration(AVFormatContext *s, int *pnum, int *pden, AVStrea
 
     switch (st->codecpar->codec_type) {
     case AVMEDIA_TYPE_VIDEO:
-        if (st->r_frame_rate.num && !pc && s->iformat) {
+        if (st->r_frame_rate.num && !pc) {
             *pnum = st->r_frame_rate.den;
             *pden = st->r_frame_rate.num;
         } else if (st->time_base.num * 1000LL > st->time_base.den) {
@@ -905,7 +905,6 @@ void ff_compute_frame_duration(AVFormatContext *s, int *pnum, int *pden, AVStrea
                       INT_MAX);
 
             if (pc && pc->repeat_pict) {
-                av_assert0(s->iformat); // this may be wrong for interlaced encoding but its not used for that case
                 av_reduce(pnum, pden,
                           (*pnum) * (1LL + pc->repeat_pict),
                           (*pden),
@@ -1235,7 +1234,7 @@ static void compute_pkt_fields(AVFormatContext *s, AVStream *st,
 
     duration = av_mul_q((AVRational) {pkt->duration, 1}, st->time_base);
     if (pkt->duration <= 0) {
-        ff_compute_frame_duration(s, &num, &den, st, pc, pkt);
+        compute_frame_duration(s, &num, &den, st, pc, pkt);
         if (den && num) {
             duration = (AVRational) {num, den};
             pkt->duration = av_rescale_rnd(1,
@@ -1758,8 +1757,6 @@ return_packet:
 /* XXX: suppress the packet queue */
 static void flush_packet_queue(AVFormatContext *s)
 {
-    if (!s->internal)
-        return;
     avpriv_packet_list_free(&s->internal->parse_queue,       &s->internal->parse_queue_end);
     avpriv_packet_list_free(&s->internal->packet_buffer,     &s->internal->packet_buffer_end);
     avpriv_packet_list_free(&s->internal->raw_packet_buffer, &s->internal->raw_packet_buffer_end);
@@ -2794,7 +2791,7 @@ static void estimate_timings_from_pts(AVFormatContext *ic, int64_t old_offset)
                 (st->start_time != AV_NOPTS_VALUE ||
                  st->internal->first_dts  != AV_NOPTS_VALUE)) {
                 if (pkt->duration == 0) {
-                    ff_compute_frame_duration(ic, &num, &den, st, st->internal->parser, pkt);
+                    compute_frame_duration(ic, &num, &den, st, st->internal->parser, pkt);
                     if (den && num) {
                         pkt->duration = av_rescale_rnd(1,
                                            num * (int64_t) st->time_base.den,
@@ -3195,24 +3192,25 @@ static int chapter_start_cmp(const void *p1, const void *p2)
     int delta = av_compare_ts(ch1->start, ch1->time_base, ch2->start, ch2->time_base);
     if (delta)
         return delta;
-    return (ch1 > ch2) - (ch1 < ch2);
+    return FFDIFFSIGN(ch1->id, ch2->id);
 }
 
 static int compute_chapters_end(AVFormatContext *s)
 {
     unsigned int i;
     int64_t max_time = 0;
-    AVChapter **timetable = av_malloc(s->nb_chapters * sizeof(*timetable));
+    AVChapter **timetable;
 
-    if (!timetable)
-        return AVERROR(ENOMEM);
+    if (!s->nb_chapters)
+        return 0;
 
     if (s->duration > 0 && s->start_time < INT64_MAX - s->duration)
         max_time = s->duration +
                        ((s->start_time == AV_NOPTS_VALUE) ? 0 : s->start_time);
 
-    for (i = 0; i < s->nb_chapters; i++)
-        timetable[i] = s->chapters[i];
+    timetable = av_memdup(s->chapters, s->nb_chapters * sizeof(*timetable));
+    if (!timetable)
+        return AVERROR(ENOMEM);
     qsort(timetable, s->nb_chapters, sizeof(*timetable), chapter_start_cmp);
 
     for (i = 0; i < s->nb_chapters; i++)
@@ -3667,18 +3665,6 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
         }
         if (!options)
             av_dict_free(&thread_opt);
-    }
-
-    for (i = 0; i < ic->nb_streams; i++) {
-        // MythTV change here
-        if (ic->streams[i]->internal->info )
-        {
-#if FF_API_R_FRAME_RATE
-        ic->streams[i]->internal->info->last_dts = AV_NOPTS_VALUE;
-#endif
-        ic->streams[i]->internal->info->fps_first_dts = AV_NOPTS_VALUE;
-        ic->streams[i]->internal->info->fps_last_dts  = AV_NOPTS_VALUE;
-        }
     }
 
     read_size = 0;
@@ -4405,8 +4391,6 @@ void avformat_close_input(AVFormatContext **ps)
         (s->flags & AVFMT_FLAG_CUSTOM_IO))
         pb = NULL;
 
-    flush_packet_queue(s);
-
     if (s->iformat)
         if (s->iformat->read_close)
             s->iformat->read_close(s);
@@ -4443,11 +4427,6 @@ AVStream *avformat_new_stream(AVFormatContext *s, const AVCodec *c)
     if (!st->internal)
         goto fail;
 
-    st->internal->info = av_mallocz(sizeof(*st->internal->info));
-    if (!st->internal->info)
-        goto fail;
-    st->internal->info->last_dts = AV_NOPTS_VALUE;
-
     st->codecpar = avcodec_parameters_alloc();
     if (!st->codecpar)
         goto fail;
@@ -4457,6 +4436,16 @@ AVStream *avformat_new_stream(AVFormatContext *s, const AVCodec *c)
         goto fail;
 
     if (s->iformat) {
+        st->internal->info = av_mallocz(sizeof(*st->internal->info));
+        if (!st->internal->info)
+            goto fail;
+
+#if FF_API_R_FRAME_RATE
+        st->internal->info->last_dts      = AV_NOPTS_VALUE;
+#endif
+        st->internal->info->fps_first_dts = AV_NOPTS_VALUE;
+        st->internal->info->fps_last_dts  = AV_NOPTS_VALUE;
+
         /* default pts setting is MPEG-like */
         avpriv_set_pts_info(st, 33, 1, 90000);
         /* we set the current DTS to 0 so that formats without any timestamps
@@ -4482,12 +4471,6 @@ AVStream *avformat_new_stream(AVFormatContext *s, const AVCodec *c)
         st->internal->pts_buffer[i] = AV_NOPTS_VALUE;
 
     st->sample_aspect_ratio = (AVRational) { 0, 1 };
-
-#if FF_API_R_FRAME_RATE
-    st->internal->info->last_dts      = AV_NOPTS_VALUE;
-#endif
-    st->internal->info->fps_first_dts = AV_NOPTS_VALUE;
-    st->internal->info->fps_last_dts  = AV_NOPTS_VALUE;
 
     st->internal->inject_global_side_data = s->internal->inject_global_side_data;
 
@@ -5586,12 +5569,8 @@ int avformat_transfer_internal_stream_timing_info(const AVOutputFormat *ofmt,
                                                   AVStream *ost, const AVStream *ist,
                                                   enum AVTimebaseSource copy_tb)
 {
-    //TODO: use [io]st->internal->avctx
-    const AVCodecContext *dec_ctx;
-    AVCodecContext       *enc_ctx;
-
-    dec_ctx = ist->internal->avctx;
-    enc_ctx = ost->internal->avctx;
+    const AVCodecContext *const dec_ctx = ist->internal->avctx;
+    AVCodecContext       *const enc_ctx = ost->internal->avctx;
 
     enc_ctx->time_base = ist->time_base;
     /*

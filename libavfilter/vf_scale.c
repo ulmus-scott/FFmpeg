@@ -148,8 +148,6 @@ typedef struct ScaleContext {
     int force_original_aspect_ratio;
     int force_divisible_by;
 
-    int nb_slices;
-
     int eval_mode;              ///< expression evaluation mode
 
 } ScaleContext;
@@ -738,6 +736,18 @@ scale:
     out->width  = outlink->w;
     out->height = outlink->h;
 
+    // Sanity checks:
+    //   1. If the output is RGB, set the matrix coefficients to RGB.
+    //   2. If the output is not RGB and we've got the RGB/XYZ (identity)
+    //      matrix configured, unset the matrix.
+    //   In theory these should be in swscale itself as the AVFrame
+    //   based API gets in, so that not every swscale API user has
+    //   to go through duplicating such sanity checks.
+    if (av_pix_fmt_desc_get(out->format)->flags & AV_PIX_FMT_FLAG_RGB)
+        out->colorspace = AVCOL_SPC_RGB;
+    else if (out->colorspace == AVCOL_SPC_RGB)
+        out->colorspace = AVCOL_SPC_UNSPECIFIED;
+
     if (scale->output_is_pal)
         avpriv_set_systematic_pal2((uint32_t*)out->data[1], outlink->format == AV_PIX_FMT_PAL8 ? AV_PIX_FMT_BGR8 : outlink->format);
 
@@ -793,17 +803,6 @@ scale:
         ret = scale_slice(scale, out, in, scale->isws[0], 0, (link->h+1)/2, 2, 0);
         if (ret >= 0)
             ret = scale_slice(scale, out, in, scale->isws[1], 0,  link->h   /2, 2, 1);
-    } else if (scale->nb_slices) {
-        int i, slice_h, slice_start, slice_end = 0;
-        const int nb_slices = FFMIN(scale->nb_slices, link->h);
-        for (i = 0; i < nb_slices; i++) {
-            slice_start = slice_end;
-            slice_end   = (link->h * (i+1)) / nb_slices;
-            slice_h     = slice_end - slice_start;
-            ret = scale_slice(scale, out, in, scale->sws, slice_start, slice_h, 1, 0);
-            if (ret < 0)
-                break;
-        }
     } else {
         ret = scale_slice(scale, out, in, scale->sws, 0, link->h, 1, 0);
     }
@@ -935,7 +934,6 @@ static const AVOption scale_options[] = {
     { "force_divisible_by", "enforce that the output resolution is divisible by a defined integer when force_original_aspect_ratio is used", OFFSET(force_divisible_by), AV_OPT_TYPE_INT, { .i64 = 1}, 1, 256, FLAGS },
     { "param0", "Scaler param 0",             OFFSET(param[0]),  AV_OPT_TYPE_DOUBLE, { .dbl = SWS_PARAM_DEFAULT  }, INT_MIN, INT_MAX, FLAGS },
     { "param1", "Scaler param 1",             OFFSET(param[1]),  AV_OPT_TYPE_DOUBLE, { .dbl = SWS_PARAM_DEFAULT  }, INT_MIN, INT_MAX, FLAGS },
-    { "nb_slices", "set the number of slices (debug purpose only)", OFFSET(nb_slices), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, FLAGS },
     { "eval", "specify when to evaluate expressions", OFFSET(eval_mode), AV_OPT_TYPE_INT, {.i64 = EVAL_MODE_INIT}, 0, EVAL_MODE_NB-1, FLAGS, "eval" },
          { "init",  "eval expressions once during initialization", 0, AV_OPT_TYPE_CONST, {.i64=EVAL_MODE_INIT},  .flags = FLAGS, .unit = "eval" },
          { "frame", "eval expressions during initialization and per-frame", 0, AV_OPT_TYPE_CONST, {.i64=EVAL_MODE_FRAME}, .flags = FLAGS, .unit = "eval" },

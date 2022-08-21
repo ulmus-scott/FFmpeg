@@ -1660,13 +1660,6 @@ static av_cold int xml_init(WriterContext *wctx)
         CHECK_COMPLIANCE(show_private_data, "private");
         CHECK_COMPLIANCE(show_value_unit,   "unit");
         CHECK_COMPLIANCE(use_value_prefix,  "prefix");
-
-        if (do_show_frames && do_show_packets) {
-            av_log(wctx, AV_LOG_ERROR,
-                   "Interleaved frames and packets are not allowed in XSD. "
-                   "Select only one between the -show_frames and the -show_packets options.\n");
-            return AVERROR(EINVAL);
-        }
     }
 
     return 0;
@@ -2714,7 +2707,7 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
         const AVOption *opt = NULL;
         while (opt = av_opt_next(dec_ctx->priv_data,opt)) {
             uint8_t *str;
-            if (opt->flags) continue;
+            if (!(opt->flags & AV_OPT_FLAG_EXPORT)) continue;
             if (av_opt_get(dec_ctx->priv_data, opt->name, 0, &str) >= 0) {
                 print_str(opt->name, str);
                 av_free(str);

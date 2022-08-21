@@ -86,6 +86,12 @@ static uint8_t default_fcode_tab[MAX_MV * 2 + 1];
 
 const AVOption ff_mpv_generic_options[] = {
     FF_MPV_COMMON_OPTS
+#if FF_API_MPEGVIDEO_OPTS
+    FF_MPV_DEPRECATED_MPEG_QUANT_OPT
+    FF_MPV_DEPRECATED_A53_CC_OPT
+    FF_MPV_DEPRECATED_MATRIX_OPT
+    FF_MPV_DEPRECATED_BFRAME_OPTS
+#endif
     { NULL },
 };
 
@@ -297,58 +303,9 @@ av_cold int ff_mpv_encode_init(AVCodecContext *avctx)
 {
     MpegEncContext *s = avctx->priv_data;
     AVCPBProperties *cpb_props;
-    int i, ret, format_supported;
+    int i, ret;
 
     mpv_encode_defaults(s);
-
-    switch (avctx->codec_id) {
-    case AV_CODEC_ID_MPEG2VIDEO:
-        if (avctx->pix_fmt != AV_PIX_FMT_YUV420P &&
-            avctx->pix_fmt != AV_PIX_FMT_YUV422P) {
-            av_log(avctx, AV_LOG_ERROR,
-                   "only YUV420 and YUV422 are supported\n");
-            return AVERROR(EINVAL);
-        }
-        break;
-    case AV_CODEC_ID_MJPEG:
-    case AV_CODEC_ID_AMV:
-        format_supported = 0;
-        /* JPEG color space */
-        if (avctx->pix_fmt == AV_PIX_FMT_YUVJ420P ||
-            avctx->pix_fmt == AV_PIX_FMT_YUVJ422P ||
-            avctx->pix_fmt == AV_PIX_FMT_YUVJ444P ||
-            (avctx->color_range == AVCOL_RANGE_JPEG &&
-             (avctx->pix_fmt == AV_PIX_FMT_YUV420P ||
-              avctx->pix_fmt == AV_PIX_FMT_YUV422P ||
-              avctx->pix_fmt == AV_PIX_FMT_YUV444P)))
-            format_supported = 1;
-        /* MPEG color space */
-        else if (avctx->strict_std_compliance <= FF_COMPLIANCE_UNOFFICIAL &&
-                 (avctx->pix_fmt == AV_PIX_FMT_YUV420P ||
-                  avctx->pix_fmt == AV_PIX_FMT_YUV422P ||
-                  avctx->pix_fmt == AV_PIX_FMT_YUV444P))
-            format_supported = 1;
-
-        if (!format_supported) {
-            av_log(avctx, AV_LOG_ERROR, "colorspace not supported in jpeg\n");
-            return AVERROR(EINVAL);
-        }
-        break;
-    case AV_CODEC_ID_SPEEDHQ:
-        if (avctx->pix_fmt != AV_PIX_FMT_YUV420P &&
-            avctx->pix_fmt != AV_PIX_FMT_YUV422P &&
-            avctx->pix_fmt != AV_PIX_FMT_YUV444P) {
-            av_log(avctx, AV_LOG_ERROR,
-                   "only YUV420/YUV422/YUV444 are supported (no alpha support yet)\n");
-            return AVERROR(EINVAL);
-        }
-        break;
-    default:
-        if (avctx->pix_fmt != AV_PIX_FMT_YUV420P) {
-            av_log(avctx, AV_LOG_ERROR, "only YUV420 is supported\n");
-            return AVERROR(EINVAL);
-        }
-    }
 
     switch (avctx->pix_fmt) {
     case AV_PIX_FMT_YUVJ444P:
@@ -576,24 +533,11 @@ FF_ENABLE_DEPRECATION_WARNINGS
         return AVERROR(EINVAL);
     }
     if ((s->codec_id == AV_CODEC_ID_H263  ||
-         s->codec_id == AV_CODEC_ID_H263P) &&
+         s->codec_id == AV_CODEC_ID_H263P ||
+         s->codec_id == AV_CODEC_ID_RV20) &&
         ((avctx->width &3) ||
          (avctx->height&3) )) {
-        av_log(avctx, AV_LOG_ERROR, "w/h must be a multiple of 4\n");
-        return AVERROR(EINVAL);
-    }
-
-    if (s->codec_id == AV_CODEC_ID_MPEG1VIDEO &&
-        (avctx->width  > 4095 ||
-         avctx->height > 4095 )) {
-        av_log(avctx, AV_LOG_ERROR, "MPEG-1 does not support resolutions above 4095x4095\n");
-        return AVERROR(EINVAL);
-    }
-
-    if (s->codec_id == AV_CODEC_ID_MPEG2VIDEO &&
-        (avctx->width  > 16383 ||
-         avctx->height > 16383 )) {
-        av_log(avctx, AV_LOG_ERROR, "MPEG-2 does not support resolutions above 16383x16383\n");
+        av_log(avctx, AV_LOG_ERROR, "width and height must be a multiple of 4\n");
         return AVERROR(EINVAL);
     }
 
@@ -601,13 +545,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
         (avctx->width &15 ||
          avctx->height&15 )) {
         av_log(avctx, AV_LOG_ERROR, "width and height must be a multiple of 16\n");
-        return AVERROR(EINVAL);
-    }
-
-    if (s->codec_id == AV_CODEC_ID_RV20 &&
-        (avctx->width &3 ||
-         avctx->height&3 )) {
-        av_log(avctx, AV_LOG_ERROR, "width and height must be a multiple of 4\n");
         return AVERROR(EINVAL);
     }
 
@@ -629,15 +566,14 @@ FF_ENABLE_DEPRECATION_WARNINGS
     if (avctx->mpeg_quant)
         s->mpeg_quant = 1;
     FF_ENABLE_DEPRECATION_WARNINGS
-#endif
 
-    // FIXME mpeg2 uses that too
     if (s->mpeg_quant && (   s->codec_id != AV_CODEC_ID_MPEG4
                           && s->codec_id != AV_CODEC_ID_MPEG2VIDEO)) {
         av_log(avctx, AV_LOG_ERROR,
                "mpeg2 style quantization not supported by codec\n");
         return AVERROR(EINVAL);
     }
+#endif
 
     if ((s->mpv_flags & FF_MPV_FLAG_CBP_RD) && !avctx->trellis) {
         av_log(avctx, AV_LOG_ERROR, "CBP RD needs trellis quant\n");
@@ -721,11 +657,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
         return AVERROR_PATCHWELCOME;
     }
 
-    if (!avctx->time_base.den || !avctx->time_base.num) {
-        av_log(avctx, AV_LOG_ERROR, "framerate not set\n");
-        return AVERROR(EINVAL);
-    }
-
 #if FF_API_PRIVATE_OPT
 FF_DISABLE_DEPRECATION_WARNINGS
     if (avctx->b_frame_strategy)
@@ -789,17 +720,17 @@ FF_ENABLE_DEPRECATION_WARNINGS
         avctx->delay  = s->low_delay ? 0 : (s->max_b_frames + 1);
         s->rtp_mode   = 1;
         break;
+#if CONFIG_MJPEG_ENCODER || CONFIG_AMV_ENCODER
     case AV_CODEC_ID_MJPEG:
     case AV_CODEC_ID_AMV:
         s->out_format = FMT_MJPEG;
         s->intra_only = 1; /* force intra only for jpeg */
-        if (!CONFIG_MJPEG_ENCODER)
-            return AVERROR_ENCODER_NOT_FOUND;
         if ((ret = ff_mjpeg_encode_init(s)) < 0)
             return ret;
         avctx->delay = 0;
         s->low_delay = 1;
         break;
+#endif
     case AV_CODEC_ID_SPEEDHQ:
         s->out_format = FMT_SPEEDHQ;
         s->intra_only = 1; /* force intra only for SHQ */
@@ -1097,7 +1028,7 @@ av_cold int ff_mpv_encode_end(AVCodecContext *avctx)
     ff_rate_control_uninit(s);
 
     ff_mpv_common_end(s);
-    if (CONFIG_MJPEG_ENCODER &&
+    if ((CONFIG_MJPEG_ENCODER || CONFIG_AMV_ENCODER) &&
         s->out_format == FMT_MJPEG)
         ff_mjpeg_encode_close(s);
 
@@ -1926,7 +1857,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
 
         frame_end(s);
 
-        if (CONFIG_MJPEG_ENCODER && s->out_format == FMT_MJPEG)
+       if ((CONFIG_MJPEG_ENCODER || CONFIG_AMV_ENCODER) && s->out_format == FMT_MJPEG)
             ff_mjpeg_encode_picture_trailer(&s->pb, s->header_bits);
 
         if (avctx->rc_buffer_size) {
@@ -2596,11 +2527,12 @@ static av_always_inline void encode_mb_internal(MpegEncContext *s,
         if (CONFIG_H263_ENCODER)
             ff_h263_encode_mb(s, s->block, motion_x, motion_y);
         break;
+#if CONFIG_MJPEG_ENCODER || CONFIG_AMV_ENCODER
     case AV_CODEC_ID_MJPEG:
     case AV_CODEC_ID_AMV:
-        if (CONFIG_MJPEG_ENCODER)
-            ff_mjpeg_encode_mb(s, s->block);
+        ff_mjpeg_encode_mb(s, s->block);
         break;
+#endif
     case AV_CODEC_ID_SPEEDHQ:
         if (CONFIG_SPEEDHQ_ENCODER)
             ff_speedhq_encode_mb(s, s->block);
@@ -2853,7 +2785,8 @@ static void write_slice_end(MpegEncContext *s){
         }
 
         ff_mpeg4_stuffing(&s->pb);
-    }else if(CONFIG_MJPEG_ENCODER && s->out_format == FMT_MJPEG){
+    } else if ((CONFIG_MJPEG_ENCODER || CONFIG_AMV_ENCODER) &&
+               s->out_format == FMT_MJPEG) {
         ff_mjpeg_encode_stuffing(s);
     } else if (CONFIG_SPEEDHQ_ENCODER && s->out_format == FMT_SPEEDHQ) {
         ff_speedhq_end_slice(s);
@@ -3921,11 +3854,14 @@ static int encode_picture(MpegEncContext *s, int picture_number)
     s->mb_x = s->mb_y = 0;
     s->last_bits= put_bits_count(&s->pb);
     switch(s->out_format) {
+#if CONFIG_MJPEG_ENCODER || CONFIG_AMV_ENCODER
     case FMT_MJPEG:
-        if (CONFIG_MJPEG_ENCODER && s->huffman != HUFFMAN_TABLE_OPTIMAL)
+        /* s->huffman == HUFFMAN_TABLE_OPTIMAL can only be true for MJPEG. */
+        if (!CONFIG_MJPEG_ENCODER || s->huffman != HUFFMAN_TABLE_OPTIMAL)
             ff_mjpeg_encode_picture_header(s->avctx, &s->pb, &s->intra_scantable,
                                            s->pred, s->intra_matrix, s->chroma_intra_matrix);
         break;
+#endif
     case FMT_SPEEDHQ:
         if (CONFIG_SPEEDHQ_ENCODER)
             ff_speedhq_encode_picture_header(s);
@@ -4777,6 +4713,12 @@ static const AVOption h263_options[] = {
     { "obmc",         "use overlapped block motion compensation.", OFFSET(obmc), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, VE },
     { "mb_info",      "emit macroblock info for RFC 2190 packetization, the parameter value is the maximum payload size", OFFSET(mb_info), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, VE },
     FF_MPV_COMMON_OPTS
+#if FF_API_MPEGVIDEO_OPTS
+    FF_MPV_DEPRECATED_MPEG_QUANT_OPT
+    FF_MPV_DEPRECATED_A53_CC_OPT
+    FF_MPV_DEPRECATED_MATRIX_OPT
+    FF_MPV_DEPRECATED_BFRAME_OPTS
+#endif
     { NULL },
 };
 
@@ -4807,6 +4749,12 @@ static const AVOption h263p_options[] = {
     { "obmc",       "use overlapped block motion compensation.", OFFSET(obmc), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, VE },
     { "structured_slices", "Write slice start position at every GOB header instead of just GOB number.", OFFSET(h263_slice_structured), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, VE},
     FF_MPV_COMMON_OPTS
+#if FF_API_MPEGVIDEO_OPTS
+    FF_MPV_DEPRECATED_MPEG_QUANT_OPT
+    FF_MPV_DEPRECATED_A53_CC_OPT
+    FF_MPV_DEPRECATED_MATRIX_OPT
+    FF_MPV_DEPRECATED_BFRAME_OPTS
+#endif
     { NULL },
 };
 static const AVClass h263p_class = {

@@ -102,6 +102,7 @@ int av_get_cpu_flags(void)
     return flags;
 }
 
+#if FF_API_CPU_FLAGS
 void av_set_cpu_flags_mask(int mask)
 {
     atomic_store_explicit(&cpu_flags, get_cpu_flags() & mask,
@@ -192,7 +193,7 @@ int av_parse_cpu_flags(const char *s)
 
     return flags & INT_MAX;
 }
-
+#endif
 int av_parse_cpu_caps(unsigned *flags, const char *s)
 {
         static const AVOption cpuflags_opts[] = {
@@ -291,6 +292,12 @@ int av_cpu_count(void)
     DWORD_PTR proc_aff, sys_aff;
     if (GetProcessAffinityMask(GetCurrentProcess(), &proc_aff, &sys_aff))
         nb_cpus = av_popcount64(proc_aff);
+#elif HAVE_SYSCTL && defined(HW_NCPUONLINE)
+    int mib[2] = { CTL_HW, HW_NCPUONLINE };
+    size_t len = sizeof(nb_cpus);
+
+    if (sysctl(mib, 2, &nb_cpus, &len, NULL, 0) == -1)
+        nb_cpus = 0;
 #elif HAVE_SYSCTL && defined(HW_NCPU)
     int mib[2] = { CTL_HW, HW_NCPU };
     size_t len = sizeof(nb_cpus);

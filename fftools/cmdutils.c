@@ -2214,6 +2214,18 @@ void *grow_array(void *array, int elem_size, int *size, int new_size)
     return array;
 }
 
+void *allocate_array_elem(void *ptr, size_t elem_size, int *nb_elems)
+{
+    void *new_elem;
+
+    if (!(new_elem = av_mallocz(elem_size)) ||
+        av_dynarray_add_nofree(ptr, nb_elems, new_elem) < 0) {
+        av_log(NULL, AV_LOG_ERROR, "Could not alloc buffer.\n");
+        exit_program(1);
+    }
+    return new_elem;
+}
+
 double get_rotation(int32_t *displaymatrix)
 {
     double theta = 0;

@@ -843,6 +843,26 @@ Compute derivative/integral of audio stream.
 
 Applying both filters one after another produces original audio.
 
+@section adynamicsmooth
+
+Apply dynamic smoothing to input audio stream.
+
+A description of the accepted options follows.
+
+@table @option
+@item sensitivity
+Set an amount of sensitivity to frequency fluctations. Default is 2.
+Allowed range is from 0 to 1e+06.
+
+@item basefreq
+Set a base frequency for smoothing. Default value is 22050.
+Allowed range is from 2 to 1e+06.
+@end table
+
+@subsection Commands
+
+This filter supports the all above options as @ref{commands}.
+
 @section aecho
 
 Apply echoing to the input audio.
@@ -2694,6 +2714,69 @@ Set oversampling factor.
 @subsection Commands
 
 This filter supports the all above options as @ref{commands}.
+
+@section aspectralstats
+
+Display frequency domain statistical information about the audio channels.
+Statistics are calculated and stored as metadata for each audio channel and for each audio frame.
+
+It accepts the following option:
+@table @option
+@item win_size
+Set the window length in samples. Default value is 2048.
+Allowed range is from 32 to 65536.
+
+@item win_func
+Set window function.
+
+It accepts the following values:
+@table @samp
+@item rect
+@item bartlett
+@item hann, hanning
+@item hamming
+@item blackman
+@item welch
+@item flattop
+@item bharris
+@item bnuttall
+@item bhann
+@item sine
+@item nuttall
+@item lanczos
+@item gauss
+@item tukey
+@item dolph
+@item cauchy
+@item parzen
+@item poisson
+@item bohman
+@end table
+Default is @code{hann}.
+
+@item overlap
+Set window overlap. Allowed range is from @code{0}
+to @code{1}. Default value is @code{0.5}.
+
+@end table
+
+A list of each metadata key follows:
+
+@table @option
+@item mean
+@item variance
+@item centroid
+@item spread
+@item skewness
+@item kurtosis
+@item entropy
+@item flatness
+@item crest
+@item flux
+@item slope
+@item decrease
+@item rolloff
+@end table
 
 @section asr
 Automatic Speech Recognition
@@ -22906,6 +22989,7 @@ Default transition effect is fade.
 
 @item duration
 Set cross fade duration in seconds.
+Range is 0 to 60 seconds.
 Default duration is 1 second.
 
 @item offset

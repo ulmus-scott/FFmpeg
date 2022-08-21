@@ -474,6 +474,41 @@ int avformat_queue_attached_pictures(AVFormatContext *s)
     return 0;
 }
 
+int ff_add_attached_pic(AVFormatContext *s, AVStream *st0, AVIOContext *pb,
+                        AVBufferRef **buf, int size)
+{
+    AVStream *st = st0;
+    AVPacket *pkt;
+    int ret;
+
+    if (!st && !(st = avformat_new_stream(s, NULL)))
+        return AVERROR(ENOMEM);
+    pkt = &st->attached_pic;
+    if (buf) {
+        av_assert1(*buf);
+        av_packet_unref(pkt);
+        pkt->buf  = *buf;
+        pkt->data = (*buf)->data;
+        pkt->size = (*buf)->size - AV_INPUT_BUFFER_PADDING_SIZE;
+        *buf = NULL;
+    } else {
+        ret = av_get_packet(pb, pkt, size);
+        if (ret < 0)
+            goto fail;
+    }
+    st->disposition         |= AV_DISPOSITION_ATTACHED_PIC;
+    st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+
+    pkt->stream_index = st->index;
+    pkt->flags       |= AV_PKT_FLAG_KEY;
+
+    return 0;
+fail:
+    if (!st0)
+        ff_free_stream(s, st);
+    return ret;
+}
+
 static int update_stream_avctx(AVFormatContext *s)
 {
     int i, ret;
@@ -2146,6 +2181,33 @@ int av_index_search_timestamp(AVStream *st, int64_t wanted_timestamp, int flags)
 {
     return ff_index_search_timestamp(st->internal->index_entries, st->internal->nb_index_entries,
                                      wanted_timestamp, flags);
+}
+
+int avformat_index_get_entries_count(const AVStream *st)
+{
+    return st->internal->nb_index_entries;
+}
+
+const AVIndexEntry *avformat_index_get_entry(const AVStream *st, int idx)
+{
+    if (idx < 0 || idx >= st->internal->nb_index_entries)
+        return NULL;
+
+    return &st->internal->index_entries[idx];
+}
+
+const AVIndexEntry *avformat_index_get_entry_from_timestamp(const AVStream *st,
+                                                            int64_t wanted_timestamp,
+                                                            int flags)
+{
+    int idx = ff_index_search_timestamp(st->internal->index_entries,
+                                        st->internal->nb_index_entries,
+                                        wanted_timestamp, flags);
+
+    if (idx < 0)
+        return NULL;
+
+    return &st->internal->index_entries[idx];
 }
 
 static int64_t ff_read_timestamp(AVFormatContext *s, int stream_index, int64_t *ppos, int64_t pos_limit,
@@ -4652,7 +4714,7 @@ fail:
 AVProgram *av_new_program(AVFormatContext *ac, int id)
 {
     AVProgram *program = NULL;
-    int i;
+    int i, ret;
 
     av_log(ac, AV_LOG_TRACE, "new_program: id=0x%04x\n", id);
 
@@ -4664,7 +4726,11 @@ AVProgram *av_new_program(AVFormatContext *ac, int id)
         program = av_mallocz(sizeof(AVProgram));
         if (!program)
             return NULL;
-        dynarray_add(&ac->programs, &ac->nb_programs, program);
+        ret = av_dynarray_add_nofree(&ac->programs, &ac->nb_programs, program);
+        if (ret < 0) {
+            av_free(program);
+            return NULL;
+        }
         program->discard = AVDISCARD_NONE;
         program->pmt_version = -1;
         program->id = id;
@@ -4684,7 +4750,7 @@ AVChapter *avpriv_new_chapter(AVFormatContext *s, int64_t id, AVRational time_ba
                               int64_t start, int64_t end, const char *title)
 {
     AVChapter *chapter = NULL;
-    int i;
+    int i, ret;
 
     if (end != AV_NOPTS_VALUE && start > end) {
         av_log(s, AV_LOG_ERROR, "Chapter end time %"PRId64" before start %"PRId64"\n", end, start);
@@ -4704,7 +4770,11 @@ AVChapter *avpriv_new_chapter(AVFormatContext *s, int64_t id, AVRational time_ba
         chapter = av_mallocz(sizeof(AVChapter));
         if (!chapter)
             return NULL;
-        dynarray_add(&s->chapters, &s->nb_chapters, chapter);
+        ret = av_dynarray_add_nofree(&s->chapters, &s->nb_chapters, chapter);
+        if (ret < 0) {
+            av_free(chapter);
+            return NULL;
+        }
     }
     av_dict_set(&chapter->metadata, "title", title, 0);
     chapter->id        = id;
@@ -5883,9 +5953,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
         && 121LL*dec_ctx->time_base.num > dec_ctx->time_base.den) {
         enc_ctx->time_base = dec_ctx->time_base;
     }
-
-    if (ost->avg_frame_rate.num)
-        enc_ctx->time_base = av_inv_q(ost->avg_frame_rate);
 
     av_reduce(&enc_ctx->time_base.num, &enc_ctx->time_base.den,
               enc_ctx->time_base.num, enc_ctx->time_base.den, INT_MAX);

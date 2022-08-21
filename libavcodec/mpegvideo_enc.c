@@ -627,7 +627,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
 #if FF_API_PRIVATE_OPT
     FF_DISABLE_DEPRECATION_WARNINGS
     if (avctx->mpeg_quant)
-        s->mpeg_quant = avctx->mpeg_quant;
+        s->mpeg_quant = 1;
     FF_ENABLE_DEPRECATION_WARNINGS
 #endif
 
@@ -1008,8 +1008,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     if (CONFIG_H263_ENCODER && s->out_format == FMT_H263)
         ff_h263_encode_init(s);
     if (CONFIG_MSMPEG4_ENCODER && s->msmpeg4_version)
-        if ((ret = ff_msmpeg4_encode_init(s)) < 0)
-            return ret;
+        ff_msmpeg4_encode_init(s);
     if ((CONFIG_MPEG1VIDEO_ENCODER || CONFIG_MPEG2VIDEO_ENCODER)
         && s->out_format == FMT_MPEG1)
         ff_mpeg1_encode_init(s);

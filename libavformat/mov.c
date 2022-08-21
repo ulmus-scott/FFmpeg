@@ -196,17 +196,16 @@ static int mov_read_covr(MOVContext *c, AVIOContext *pb, int type, int len)
         return 0;
     }
 
-    st = avformat_new_stream(c->fc, NULL);
-    if (!st)
-        return AVERROR(ENOMEM);
     sc = av_mallocz(sizeof(*sc));
     if (!sc)
         return AVERROR(ENOMEM);
-    st->priv_data = sc;
-
-    ret = av_get_packet(pb, &st->attached_pic, len);
-    if (ret < 0)
+    ret = ff_add_attached_pic(c->fc, NULL, pb, NULL, len);
+    if (ret < 0) {
+        av_free(sc);
         return ret;
+    }
+    st = c->fc->streams[c->fc->nb_streams - 1];
+    st->priv_data = sc;
 
     if (st->attached_pic.size >= 8 && id != AV_CODEC_ID_BMP) {
         if (AV_RB64(st->attached_pic.data) == 0x89504e470d0a1a0a) {
@@ -215,13 +214,6 @@ static int mov_read_covr(MOVContext *c, AVIOContext *pb, int type, int len)
             id = AV_CODEC_ID_MJPEG;
         }
     }
-
-    st->disposition              |= AV_DISPOSITION_ATTACHED_PIC;
-
-    st->attached_pic.stream_index = st->index;
-    st->attached_pic.flags       |= AV_PKT_FLAG_KEY;
-
-    st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
     st->codecpar->codec_id   = id;
 
     return 0;
@@ -4628,7 +4620,7 @@ static int mov_read_tkhd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
             disp_transform[i] = hypot(sc->display_matrix[0 + i],
                                       sc->display_matrix[3 + i]);
 
-        if (disp_transform[0] > 0       && disp_transform[1] > 0 &&
+        if (disp_transform[0] > 1       && disp_transform[1] > 1 &&
             disp_transform[0] < (1<<24) && disp_transform[1] < (1<<24) &&
             fabs((disp_transform[0] / disp_transform[1]) - 1.0) > 0.01)
             st->sample_aspect_ratio = av_d2q(
@@ -7122,7 +7114,7 @@ static int mov_probe(const AVProbeData *p)
         int64_t size;
         int minsize = 8;
         /* ignore invalid offset */
-        if ((offset + 8) > (unsigned int)p->buf_size)
+        if ((offset + 8ULL) > (unsigned int)p->buf_size)
             break;
         size = AV_RB32(p->buf + offset);
         if (size == 1 && offset + 16 <= (unsigned int)p->buf_size) {
@@ -7169,6 +7161,8 @@ static int mov_probe(const AVProbeData *p)
             score  = FFMAX(score, AVPROBE_SCORE_EXTENSION);
             break;
         }
+        if (size > INT64_MAX - offset)
+            break;
         offset += size;
     }
     if (score > AVPROBE_SCORE_MAX - 50 && moov_offset != -1) {
@@ -7233,11 +7227,8 @@ static void mov_read_chapters(AVFormatContext *s)
                     goto finish;
                 }
 
-                if (av_get_packet(sc->pb, &st->attached_pic, sample->size) < 0)
+                if (ff_add_attached_pic(s, st, sc->pb, NULL, sample->size) < 0)
                     goto finish;
-
-                st->attached_pic.stream_index = st->index;
-                st->attached_pic.flags       |= AV_PKT_FLAG_KEY;
             }
         } else {
             st->codecpar->codec_type = AVMEDIA_TYPE_DATA;

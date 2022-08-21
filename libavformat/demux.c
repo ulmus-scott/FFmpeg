@@ -2070,9 +2070,6 @@ static int try_decode_frame(AVFormatContext *s, AVStream *st,
         }
     }
 
-    if (!pkt.data && !got_picture)
-        ret = -1;
-
 fail:
     if (do_skip_frame) {
         avctx->skip_frame = skip_frame;
@@ -2813,11 +2810,9 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
 
             /* flush the decoders */
             if (sti->info->found_decoder == 1) {
-                do {
-                    err = try_decode_frame(ic, st, empty_pkt,
-                                            (options && i < orig_nb_streams)
-                                            ? &options[i] : NULL);
-                } while (err > 0 && !has_codec_parameters(st, NULL));
+                err = try_decode_frame(ic, st, empty_pkt,
+                                        (options && i < orig_nb_streams)
+                                        ? &options[i] : NULL);
 
                 if (err < 0) {
                     av_log(ic, AV_LOG_INFO,

@@ -452,7 +452,9 @@ Optimization options (experts only):
   --disable-mipsdspr2      disable MIPS DSP ASE R2 optimizations
   --disable-msa            disable MSA optimizations
   --disable-mipsfpu        disable floating point MIPS optimizations
-  --disable-mmi            disable Loongson SIMD optimizations
+  --disable-mmi            disable Loongson MMI optimizations
+  --disable-lsx            disable Loongson LSX optimizations
+  --disable-lasx           disable Loongson LASX optimizations
   --disable-fast-unaligned consider unaligned accesses slow
 
 Developer options (useful when working on FFmpeg itself):
@@ -2081,6 +2083,8 @@ ARCH_EXT_LIST_LOONGSON="
     loongson2
     loongson3
     mmi
+    lsx
+    lasx
 "
 
 ARCH_EXT_LIST_X86_SIMD="
@@ -2617,6 +2621,10 @@ power8_deps="vsx"
 
 loongson2_deps="mips"
 loongson3_deps="mips"
+mmi_deps_any="loongson2 loongson3"
+lsx_deps="loongarch"
+lasx_deps="lsx"
+
 mips32r2_deps="mips"
 mips32r5_deps="mips"
 mips32r6_deps="mips"
@@ -2625,7 +2633,6 @@ mips64r6_deps="mips"
 mipsfpu_deps="mips"
 mipsdsp_deps="mips"
 mipsdspr2_deps="mips"
-mmi_deps_any="loongson2 loongson3"
 msa_deps="mipsfpu"
 
 cpunop_deps="i686"
@@ -3719,6 +3726,7 @@ tonemap_vaapi_filter_deps="vaapi VAProcFilterParameterBufferHDRToneMapping"
 tonemap_opencl_filter_deps="opencl const_nan"
 transpose_opencl_filter_deps="opencl"
 transpose_vaapi_filter_deps="vaapi VAProcPipelineCaps_rotation_flags"
+transpose_vulkan_filter_deps="vulkan spirv_compiler"
 unsharp_opencl_filter_deps="opencl"
 uspp_filter_deps="gpl avcodec"
 vaguedenoiser_filter_deps="gpl"
@@ -6135,6 +6143,9 @@ EOF
         ;;
     esac
 
+elif enabled loongarch; then
+    enabled lsx && check_inline_asm lsx '"vadd.b $vr0, $vr1, $vr2"' '-mlsx' && append LSXFLAGS '-mlsx'
+    enabled lasx && check_inline_asm lasx '"xvadd.b $xr0, $xr1, $xr2"' '-mlasx' && append LASXFLAGS '-mlasx'
 fi
 
 check_cc intrinsics_neon arm_neon.h "int16x8_t test = vdupq_n_s16(0)"
@@ -6564,7 +6575,7 @@ enabled libopus           && {
         require_pkg_config libopus opus opus_multistream.h opus_multistream_surround_encoder_create
     }
 }
-enabled libplacebo        && require_pkg_config libplacebo "libplacebo >= 4.173.0" libplacebo/vulkan.h pl_vulkan_create
+enabled libplacebo        && require_pkg_config libplacebo "libplacebo >= 4.184.0" libplacebo/vulkan.h pl_vulkan_create
 enabled libpulse          && require_pkg_config libpulse libpulse pulse/pulseaudio.h pa_context_new
 enabled librabbitmq       && require_pkg_config librabbitmq "librabbitmq >= 0.7.1" amqp.h amqp_new_connection
 enabled librav1e          && require_pkg_config librav1e "rav1e >= 0.4.0" rav1e.h rav1e_context_new
@@ -7492,6 +7503,10 @@ if enabled ppc; then
     echo "PPC 4xx optimizations     ${ppc4xx-no}"
     echo "dcbzl available           ${dcbzl-no}"
 fi
+if enabled loongarch; then
+    echo "LSX enabled               ${lsx-no}"
+    echo "LASX enabled              ${lasx-no}"
+fi
 echo "debug symbols             ${debug-no}"
 echo "strip symbols             ${stripping-no}"
 echo "optimize for size         ${small-no}"
@@ -7654,6 +7669,8 @@ ASMSTRIPFLAGS=$ASMSTRIPFLAGS
 X86ASMFLAGS=$X86ASMFLAGS
 MSAFLAGS=$MSAFLAGS
 MMIFLAGS=$MMIFLAGS
+LSXFLAGS=$LSXFLAGS
+LASXFLAGS=$LASXFLAGS
 BUILDSUF=$build_suffix
 PROGSSUF=$progs_suffix
 FULLNAME=$FULLNAME

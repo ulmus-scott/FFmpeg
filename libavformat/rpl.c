@@ -210,8 +210,10 @@ static int rpl_read_header(AVFormatContext *s)
             ast->codecpar->bits_per_coded_sample = 4;
 
         ast->codecpar->bit_rate = ast->codecpar->sample_rate *
-                                  ast->codecpar->bits_per_coded_sample *
-                                  ast->codecpar->channels;
+                                  (int64_t)ast->codecpar->channels;
+        if (ast->codecpar->bit_rate > INT64_MAX / ast->codecpar->bits_per_coded_sample)
+            return AVERROR_INVALIDDATA;
+        ast->codecpar->bit_rate *= ast->codecpar->bits_per_coded_sample;
 
         ast->codecpar->codec_id = AV_CODEC_ID_NONE;
         switch (audio_format) {
@@ -337,7 +339,7 @@ static int rpl_read_packet(AVFormatContext *s, AVPacket *pkt)
 
         avio_skip(pb, 4); /* flags */
         frame_size = avio_rl32(pb);
-        if (avio_seek(pb, -8, SEEK_CUR) < 0)
+        if (avio_feof(pb) || avio_seek(pb, -8, SEEK_CUR) < 0 || !frame_size)
             return AVERROR(EIO);
 
         ret = av_get_packet(pb, pkt, frame_size);

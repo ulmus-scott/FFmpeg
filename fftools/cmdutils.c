@@ -2201,13 +2201,11 @@ void *grow_array(void *array, int elem_size, int *size, int new_size)
     return array;
 }
 
-double get_rotation(AVStream *st)
+double get_rotation(int32_t *displaymatrix)
 {
-    uint8_t* displaymatrix = av_stream_get_side_data(st,
-                                                     AV_PKT_DATA_DISPLAYMATRIX, NULL);
     double theta = 0;
     if (displaymatrix)
-        theta = -av_display_rotation_get((int32_t*) displaymatrix);
+        theta = -round(av_display_rotation_get((int32_t*) displaymatrix));
 
     theta -= 360*floor(theta/360 + 0.9/360);
 

@@ -757,21 +757,44 @@ static int configure_input_video_filter(FilterGraph *fg, InputFilter *ifilter,
     last_filter = ifilter->filter;
 
     if (ist->autorotate) {
-        double theta = get_rotation(ist->st);
+        int32_t *displaymatrix = ifilter->displaymatrix;
+        double theta;
+
+        if (!displaymatrix)
+            displaymatrix = (int32_t *)av_stream_get_side_data(ist->st, AV_PKT_DATA_DISPLAYMATRIX, NULL);
+        theta = get_rotation(displaymatrix);
 
         if (fabs(theta - 90) < 1.0) {
+            if (displaymatrix[3] > 0) {
+                ret = insert_filter(&last_filter, &pad_idx, "hflip", NULL);
+                if (ret < 0)
+                    return ret;
+            }
             ret = insert_filter(&last_filter, &pad_idx, "transpose", "clock");
         } else if (fabs(theta - 180) < 1.0) {
-            ret = insert_filter(&last_filter, &pad_idx, "hflip", NULL);
-            if (ret < 0)
-                return ret;
-            ret = insert_filter(&last_filter, &pad_idx, "vflip", NULL);
+            if (displaymatrix[0] < 0) {
+                ret = insert_filter(&last_filter, &pad_idx, "hflip", NULL);
+                if (ret < 0)
+                    return ret;
+            }
+            if (displaymatrix[4] < 0) {
+                ret = insert_filter(&last_filter, &pad_idx, "vflip", NULL);
+            }
         } else if (fabs(theta - 270) < 1.0) {
+            if (displaymatrix[3] < 0) {
+                ret = insert_filter(&last_filter, &pad_idx, "hflip", NULL);
+                if (ret < 0)
+                    return ret;
+            }
             ret = insert_filter(&last_filter, &pad_idx, "transpose", "cclock");
         } else if (fabs(theta) > 1.0) {
             char rotate_buf[64];
             snprintf(rotate_buf, sizeof(rotate_buf), "%f*PI/180", theta);
             ret = insert_filter(&last_filter, &pad_idx, "rotate", rotate_buf);
+        } else if (fabs(theta) < 1.0) {
+            if (displaymatrix && displaymatrix[4] < 0) {
+                ret = insert_filter(&last_filter, &pad_idx, "vflip", NULL);
+            }
         }
         if (ret < 0)
             return ret;
@@ -1127,6 +1150,8 @@ fail:
 
 int ifilter_parameters_from_frame(InputFilter *ifilter, const AVFrame *frame)
 {
+    AVFrameSideData *sd;
+
     av_buffer_unref(&ifilter->hw_frames_ctx);
 
     ifilter->format = frame->format;
@@ -1138,6 +1163,11 @@ int ifilter_parameters_from_frame(InputFilter *ifilter, const AVFrame *frame)
     ifilter->sample_rate         = frame->sample_rate;
     ifilter->channels            = frame->channels;
     ifilter->channel_layout      = frame->channel_layout;
+
+    av_freep(&ifilter->displaymatrix);
+    sd = av_frame_get_side_data(frame, AV_FRAME_DATA_DISPLAYMATRIX);
+    if (sd)
+        ifilter->displaymatrix = av_memdup(sd->data, sizeof(int32_t) * 9);
 
     if (frame->hw_frames_ctx) {
         ifilter->hw_frames_ctx = av_buffer_ref(frame->hw_frames_ctx);

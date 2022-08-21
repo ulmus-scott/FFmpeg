@@ -207,8 +207,7 @@ static int dnn_classify_query_formats(AVFilterContext *context)
         AV_PIX_FMT_NV12,
         AV_PIX_FMT_NONE
     };
-    AVFilterFormats *fmts_list = ff_make_format_list(pix_fmts);
-    return ff_set_common_formats(context, fmts_list);
+    return ff_set_common_formats_from_list(context, pix_fmts);
 }
 
 static int dnn_classify_flush_frame(AVFilterLink *outlink, int64_t pts, int64_t *out_pts)
@@ -309,7 +308,6 @@ static const AVFilterPad dnn_classify_inputs[] = {
         .name         = "default",
         .type         = AVMEDIA_TYPE_VIDEO,
     },
-    { NULL }
 };
 
 static const AVFilterPad dnn_classify_outputs[] = {
@@ -317,7 +315,6 @@ static const AVFilterPad dnn_classify_outputs[] = {
         .name = "default",
         .type = AVMEDIA_TYPE_VIDEO,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_dnn_classify = {
@@ -327,8 +324,8 @@ const AVFilter ff_vf_dnn_classify = {
     .init          = dnn_classify_init,
     .uninit        = dnn_classify_uninit,
     .query_formats = dnn_classify_query_formats,
-    .inputs        = dnn_classify_inputs,
-    .outputs       = dnn_classify_outputs,
+    FILTER_INPUTS(dnn_classify_inputs),
+    FILTER_OUTPUTS(dnn_classify_outputs),
     .priv_class    = &dnn_classify_class,
     .activate      = dnn_classify_activate,
 };

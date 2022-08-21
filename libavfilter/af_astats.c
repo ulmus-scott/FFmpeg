@@ -147,8 +147,6 @@ AVFILTER_DEFINE_CLASS(astats);
 
 static int query_formats(AVFilterContext *ctx)
 {
-    AVFilterFormats *formats;
-    AVFilterChannelLayouts *layouts;
     static const enum AVSampleFormat sample_fmts[] = {
         AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S16P,
         AV_SAMPLE_FMT_S32, AV_SAMPLE_FMT_S32P,
@@ -157,26 +155,15 @@ static int query_formats(AVFilterContext *ctx)
         AV_SAMPLE_FMT_DBL, AV_SAMPLE_FMT_DBLP,
         AV_SAMPLE_FMT_NONE
     };
-    int ret;
-
-    layouts = ff_all_channel_counts();
-    if (!layouts)
-        return AVERROR(ENOMEM);
-    ret = ff_set_common_channel_layouts(ctx, layouts);
+    int ret = ff_set_common_all_channel_counts(ctx);
     if (ret < 0)
         return ret;
 
-    formats = ff_make_format_list(sample_fmts);
-    if (!formats)
-        return AVERROR(ENOMEM);
-    ret = ff_set_common_formats(ctx, formats);
+    ret = ff_set_common_formats_from_list(ctx, sample_fmts);
     if (ret < 0)
         return ret;
 
-    formats = ff_all_samplerates();
-    if (!formats)
-        return AVERROR(ENOMEM);
-    return ff_set_common_samplerates(ctx, formats);
+    return ff_set_common_all_samplerates(ctx);
 }
 
 static void reset_stats(AudioStatsContext *s)
@@ -645,7 +632,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *buf)
         s->nb_frames++;
     }
 
-    ctx->internal->execute(ctx, filter_channel, buf, NULL, FFMIN(inlink->channels, ff_filter_get_nb_threads(ctx)));
+    ff_filter_execute(ctx, filter_channel, buf, NULL,
+                      FFMIN(inlink->channels, ff_filter_get_nb_threads(ctx)));
 
     if (s->metadata)
         set_metadata(s, metadata);
@@ -827,7 +815,6 @@ static const AVFilterPad astats_inputs[] = {
         .type         = AVMEDIA_TYPE_AUDIO,
         .filter_frame = filter_frame,
     },
-    { NULL }
 };
 
 static const AVFilterPad astats_outputs[] = {
@@ -836,7 +823,6 @@ static const AVFilterPad astats_outputs[] = {
         .type         = AVMEDIA_TYPE_AUDIO,
         .config_props = config_output,
     },
-    { NULL }
 };
 
 const AVFilter ff_af_astats = {
@@ -846,7 +832,7 @@ const AVFilter ff_af_astats = {
     .priv_size     = sizeof(AudioStatsContext),
     .priv_class    = &astats_class,
     .uninit        = uninit,
-    .inputs        = astats_inputs,
-    .outputs       = astats_outputs,
+    FILTER_INPUTS(astats_inputs),
+    FILTER_OUTPUTS(astats_outputs),
     .flags         = AVFILTER_FLAG_SLICE_THREADS,
 };

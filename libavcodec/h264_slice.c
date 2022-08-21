@@ -379,19 +379,15 @@ int ff_h264_update_thread_context(AVCodecContext *dst,
     h->droppable            = h1->droppable;
 
     for (i = 0; i < H264_MAX_PICTURE_COUNT; i++) {
-        ff_h264_unref_picture(h, &h->DPB[i]);
-        if (h1->DPB[i].f->buf[0] &&
-            (ret = ff_h264_ref_picture(h, &h->DPB[i], &h1->DPB[i])) < 0)
+        ret = ff_h264_replace_picture(h, &h->DPB[i], &h1->DPB[i]);
+        if (ret < 0)
             return ret;
     }
 
     h->cur_pic_ptr = REBASE_PICTURE(h1->cur_pic_ptr, h, h1);
-    ff_h264_unref_picture(h, &h->cur_pic);
-    if (h1->cur_pic.f->buf[0]) {
-        ret = ff_h264_ref_picture(h, &h->cur_pic, &h1->cur_pic);
-        if (ret < 0)
-            return ret;
-    }
+    ret = ff_h264_replace_picture(h, &h->cur_pic, &h1->cur_pic);
+    if (ret < 0)
+        return ret;
 
     h->enable_er       = h1->enable_er;
     h->workaround_bugs = h1->workaround_bugs;
@@ -1896,6 +1892,8 @@ static int h264_slice_header_parse(const H264Context *h, H264SliceContext *sl,
     if (nal->type == H264_NAL_IDR_SLICE)
         get_ue_golomb_long(&sl->gb); /* idr_pic_id */
 
+    sl->poc_lsb = 0;
+    sl->delta_poc_bottom = 0;
     if (sps->poc_type == 0) {
         sl->poc_lsb = get_bits(&sl->gb, sps->log2_max_poc_lsb);
 
@@ -1903,6 +1901,7 @@ static int h264_slice_header_parse(const H264Context *h, H264SliceContext *sl,
             sl->delta_poc_bottom = get_se_golomb(&sl->gb);
     }
 
+    sl->delta_poc[0] = sl->delta_poc[1] = 0;
     if (sps->poc_type == 1 && !sps->delta_pic_order_always_zero_flag) {
         sl->delta_poc[0] = get_se_golomb(&sl->gb);
 

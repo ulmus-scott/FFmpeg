@@ -352,7 +352,7 @@ static av_cold int init(AVFilterContext *ctx)
         pad.type = AVMEDIA_TYPE_VIDEO;
         pad.config_props = config_output;
 
-        if ((ret = ff_insert_outpad(ctx, ctx->nb_outputs, &pad)) < 0) {
+        if ((ret = ff_append_outpad(ctx, &pad)) < 0) {
             av_freep(&pad.name);
             return ret;
         }
@@ -376,7 +376,6 @@ static const AVFilterPad extractplanes_inputs[] = {
         .filter_frame = filter_frame,
         .config_props = config_input,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_extractplanes = {
@@ -387,7 +386,7 @@ const AVFilter ff_vf_extractplanes = {
     .init          = init,
     .uninit        = uninit,
     .query_formats = query_formats,
-    .inputs        = extractplanes_inputs,
+    FILTER_INPUTS(extractplanes_inputs),
     .outputs       = NULL,
     .flags         = AVFILTER_FLAG_DYNAMIC_OUTPUTS,
 };
@@ -411,7 +410,7 @@ const AVFilter ff_vf_alphaextract = {
     .init           = init_alphaextract,
     .uninit         = uninit,
     .query_formats  = query_formats,
-    .inputs         = extractplanes_inputs,
+    FILTER_INPUTS(extractplanes_inputs),
     .outputs        = NULL,
     .flags          = AVFILTER_FLAG_DYNAMIC_OUTPUTS,
 };

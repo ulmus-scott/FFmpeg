@@ -75,8 +75,7 @@ static int query_formats(AVFilterContext *context)
         AV_PIX_FMT_NV12,
         AV_PIX_FMT_NONE
     };
-    AVFilterFormats *fmts_list = ff_make_format_list(pix_fmts);
-    return ff_set_common_formats(context, fmts_list);
+    return ff_set_common_formats_from_list(context, pix_fmts);
 }
 
 #define LOG_FORMAT_CHANNEL_MISMATCH()                       \
@@ -435,7 +434,6 @@ static const AVFilterPad dnn_processing_inputs[] = {
         .type         = AVMEDIA_TYPE_VIDEO,
         .config_props = config_input,
     },
-    { NULL }
 };
 
 static const AVFilterPad dnn_processing_outputs[] = {
@@ -444,7 +442,6 @@ static const AVFilterPad dnn_processing_outputs[] = {
         .type = AVMEDIA_TYPE_VIDEO,
         .config_props  = config_output,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_dnn_processing = {
@@ -454,8 +451,8 @@ const AVFilter ff_vf_dnn_processing = {
     .init          = init,
     .uninit        = uninit,
     .query_formats = query_formats,
-    .inputs        = dnn_processing_inputs,
-    .outputs       = dnn_processing_outputs,
+    FILTER_INPUTS(dnn_processing_inputs),
+    FILTER_OUTPUTS(dnn_processing_outputs),
     .priv_class    = &dnn_processing_class,
     .activate      = activate,
 };

@@ -137,10 +137,7 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_NONE
     };
 
-    AVFilterFormats *fmts_list = ff_make_format_list(pix_fmts);
-    if (!fmts_list)
-        return AVERROR(ENOMEM);
-    return ff_set_common_formats(ctx, fmts_list);
+    return ff_set_common_formats_from_list(ctx, pix_fmts);
 }
 
 static av_cold void uninit(AVFilterContext *ctx)
@@ -1833,7 +1830,8 @@ static int xfade_frame(AVFilterContext *ctx, AVFrame *a, AVFrame *b)
     av_frame_copy_props(out, a);
 
     td.xf[0] = a, td.xf[1] = b, td.out = out, td.progress = progress;
-    ctx->internal->execute(ctx, xfade_slice, &td, NULL, FFMIN(outlink->h, ff_filter_get_nb_threads(ctx)));
+    ff_filter_execute(ctx, xfade_slice, &td, NULL,
+                      FFMIN(outlink->h, ff_filter_get_nb_threads(ctx)));
 
     out->pts = s->pts;
 
@@ -1944,7 +1942,6 @@ static const AVFilterPad xfade_inputs[] = {
         .name          = "xfade",
         .type          = AVMEDIA_TYPE_VIDEO,
     },
-    { NULL }
 };
 
 static const AVFilterPad xfade_outputs[] = {
@@ -1953,7 +1950,6 @@ static const AVFilterPad xfade_outputs[] = {
         .type          = AVMEDIA_TYPE_VIDEO,
         .config_props  = config_output,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_xfade = {
@@ -1964,7 +1960,7 @@ const AVFilter ff_vf_xfade = {
     .query_formats = query_formats,
     .activate      = xfade_activate,
     .uninit        = uninit,
-    .inputs        = xfade_inputs,
-    .outputs       = xfade_outputs,
+    FILTER_INPUTS(xfade_inputs),
+    FILTER_OUTPUTS(xfade_outputs),
     .flags         = AVFILTER_FLAG_SLICE_THREADS,
 };

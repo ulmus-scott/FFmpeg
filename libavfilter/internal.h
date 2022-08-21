@@ -61,20 +61,31 @@ struct AVFilterPad {
     enum AVMediaType type;
 
     /**
-     * Callback function to get a video buffer. If NULL, the filter system will
-     * use ff_default_get_video_buffer().
+     * The filter expects writable frames from its input link,
+     * duplicating data buffers if needed.
      *
-     * Input video pads only.
+     * input pads only.
      */
-    AVFrame *(*get_video_buffer)(AVFilterLink *link, int w, int h);
+#define AVFILTERPAD_FLAG_NEEDS_WRITABLE                  (1 << 0)
 
     /**
-     * Callback function to get an audio buffer. If NULL, the filter system will
-     * use ff_default_get_audio_buffer().
-     *
-     * Input audio pads only.
+     * A combination of AVFILTERPAD_FLAG_* flags.
      */
-    AVFrame *(*get_audio_buffer)(AVFilterLink *link, int nb_samples);
+    int flags;
+
+    /**
+     * Callback functions to get a video/audio buffers. If NULL,
+     * the filter system will use ff_default_get_video_buffer() for video
+     * and ff_default_get_audio_buffer() for audio.
+     *
+     * The state of the union is determined by type.
+     *
+     * Input pads only.
+     */
+    union {
+        AVFrame *(*video)(AVFilterLink *link, int w, int h);
+        AVFrame *(*audio)(AVFilterLink *link, int nb_samples);
+    } get_buffer;
 
     /**
      * Filtering callback. This is where a filter receives a frame with
@@ -112,14 +123,6 @@ struct AVFilterPad {
      * and another value on error.
      */
     int (*config_props)(AVFilterLink *link);
-
-    /**
-     * The filter expects writable frames from its input link,
-     * duplicating data buffers if needed.
-     *
-     * input pads only.
-     */
-    int needs_writable;
 };
 
 struct AVFilterGraphInternal {
@@ -131,6 +134,18 @@ struct AVFilterGraphInternal {
 struct AVFilterInternal {
     avfilter_execute_func *execute;
 };
+
+static av_always_inline int ff_filter_execute(AVFilterContext *ctx, avfilter_action_func *func,
+                                              void *arg, int *ret, int nb_jobs)
+{
+    return ctx->internal->execute(ctx, func, arg, ret, nb_jobs);
+}
+
+#define FILTER_INOUTPADS(inout, array) \
+       .inout        = array, \
+       .nb_ ## inout = FF_ARRAY_ELEMS(array)
+#define FILTER_INPUTS(array) FILTER_INOUTPADS(inputs, (array))
+#define FILTER_OUTPUTS(array) FILTER_INOUTPADS(outputs, (array))
 
 /**
  * Tell if an integer is contained in the provided -1-terminated list of integers.
@@ -217,34 +232,29 @@ void ff_tlog_link(void *ctx, AVFilterLink *link, int end);
 /**
  * Insert a new pad.
  *
- * @param idx Insertion point. Pad is inserted at the end if this point
- *            is beyond the end of the list of pads.
  * @param count Pointer to the number of pads in the list
- * @param padidx_off Offset within an AVFilterLink structure to the element
- *                   to increment when inserting a new pad causes link
- *                   numbering to change
  * @param pads Pointer to the pointer to the beginning of the list of pads
  * @param links Pointer to the pointer to the beginning of the list of links
  * @param newpad The new pad to add. A copy is made when adding.
  * @return >= 0 in case of success, a negative AVERROR code on error
  */
-int ff_insert_pad(unsigned idx, unsigned *count, size_t padidx_off,
+int ff_append_pad(unsigned *count,
                    AVFilterPad **pads, AVFilterLink ***links,
                    AVFilterPad *newpad);
 
 /** Insert a new input pad for the filter. */
-static inline int ff_insert_inpad(AVFilterContext *f, unsigned index,
+static inline int ff_append_inpad(AVFilterContext *f,
                                    AVFilterPad *p)
 {
-    return ff_insert_pad(index, &f->nb_inputs, offsetof(AVFilterLink, dstpad),
+    return ff_append_pad(&f->nb_inputs,
                   &f->input_pads, &f->inputs, p);
 }
 
 /** Insert a new output pad for the filter. */
-static inline int ff_insert_outpad(AVFilterContext *f, unsigned index,
+static inline int ff_append_outpad(AVFilterContext *f,
                                     AVFilterPad *p)
 {
-    return ff_insert_pad(index, &f->nb_outputs, offsetof(AVFilterLink, srcpad),
+    return ff_append_pad(&f->nb_outputs,
                   &f->output_pads, &f->outputs, p);
 }
 

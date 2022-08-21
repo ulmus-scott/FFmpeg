@@ -970,13 +970,13 @@ static av_cold int fieldmatch_init(AVFilterContext *ctx)
     };
     int ret;
 
-    if ((ret = ff_insert_inpad(ctx, INPUT_MAIN, &pad)) < 0)
+    if ((ret = ff_append_inpad(ctx, &pad)) < 0)
         return ret;
 
     if (fm->ppsrc) {
         pad.name = "clean_src";
         pad.config_props = NULL;
-        if ((ret = ff_insert_inpad(ctx, INPUT_CLEANSRC, &pad)) < 0)
+        if ((ret = ff_append_inpad(ctx, &pad)) < 0)
             return ret;
     }
 
@@ -1037,7 +1037,6 @@ static const AVFilterPad fieldmatch_outputs[] = {
         .type          = AVMEDIA_TYPE_VIDEO,
         .config_props  = config_output,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_fieldmatch = {
@@ -1049,7 +1048,7 @@ const AVFilter ff_vf_fieldmatch = {
     .activate       = activate,
     .uninit         = fieldmatch_uninit,
     .inputs         = NULL,
-    .outputs        = fieldmatch_outputs,
+    FILTER_OUTPUTS(fieldmatch_outputs),
     .priv_class     = &fieldmatch_class,
     .flags          = AVFILTER_FLAG_DYNAMIC_INPUTS,
 };

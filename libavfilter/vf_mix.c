@@ -125,7 +125,7 @@ static av_cold int init(AVFilterContext *ctx)
             if (!pad.name)
                 return AVERROR(ENOMEM);
 
-            if ((ret = ff_insert_inpad(ctx, i, &pad)) < 0) {
+            if ((ret = ff_append_inpad(ctx, &pad)) < 0) {
                 av_freep(&pad.name);
                 return ret;
             }
@@ -226,7 +226,8 @@ static int process_frame(FFFrameSync *fs)
 
     td.in = in;
     td.out = out;
-    ctx->internal->execute(ctx, mix_frames, &td, NULL, FFMIN(s->height[0], ff_filter_get_nb_threads(ctx)));
+    ff_filter_execute(ctx, mix_frames, &td, NULL,
+                      FFMIN(s->height[0], ff_filter_get_nb_threads(ctx)));
 
     return ff_filter_frame(outlink, out);
 }
@@ -352,7 +353,6 @@ static const AVFilterPad outputs[] = {
         .type          = AVMEDIA_TYPE_VIDEO,
         .config_props  = config_output,
     },
-    { NULL }
 };
 
 #if CONFIG_MIX_FILTER
@@ -364,7 +364,7 @@ const AVFilter ff_vf_mix = {
     .priv_size     = sizeof(MixContext),
     .priv_class    = &mix_class,
     .query_formats = query_formats,
-    .outputs       = outputs,
+    FILTER_OUTPUTS(outputs),
     .init          = init,
     .uninit        = uninit,
     .activate      = activate,
@@ -412,7 +412,8 @@ static int tmix_filter_frame(AVFilterLink *inlink, AVFrame *in)
 
     td.out = out;
     td.in = s->frames;
-    ctx->internal->execute(ctx, mix_frames, &td, NULL, FFMIN(s->height[0], ff_filter_get_nb_threads(ctx)));
+    ff_filter_execute(ctx, mix_frames, &td, NULL,
+                      FFMIN(s->height[0], ff_filter_get_nb_threads(ctx)));
 
     return ff_filter_frame(outlink, out);
 }
@@ -430,7 +431,6 @@ static const AVFilterPad inputs[] = {
         .type          = AVMEDIA_TYPE_VIDEO,
         .filter_frame  = tmix_filter_frame,
     },
-    { NULL }
 };
 
 AVFILTER_DEFINE_CLASS(tmix);
@@ -441,8 +441,8 @@ const AVFilter ff_vf_tmix = {
     .priv_size     = sizeof(MixContext),
     .priv_class    = &tmix_class,
     .query_formats = query_formats,
-    .outputs       = outputs,
-    .inputs        = inputs,
+    FILTER_OUTPUTS(outputs),
+    FILTER_INPUTS(inputs),
     .init          = init,
     .uninit        = uninit,
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL | AVFILTER_FLAG_SLICE_THREADS,

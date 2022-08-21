@@ -530,31 +530,31 @@ static int config_props(AVFilterLink *outlink)
 
         for (i = 0; i < 3; i++) {
             int in_v_chr_pos = scale->in_v_chr_pos, out_v_chr_pos = scale->out_v_chr_pos;
-            struct SwsContext **s = swscs[i];
-            *s = sws_alloc_context();
-            if (!*s)
+            struct SwsContext *const s = sws_alloc_context();
+            if (!s)
                 return AVERROR(ENOMEM);
+            *swscs[i] = s;
 
-            av_opt_set_int(*s, "srcw", inlink0 ->w, 0);
-            av_opt_set_int(*s, "srch", inlink0 ->h >> !!i, 0);
-            av_opt_set_int(*s, "src_format", inlink0->format, 0);
-            av_opt_set_int(*s, "dstw", outlink->w, 0);
-            av_opt_set_int(*s, "dsth", outlink->h >> !!i, 0);
-            av_opt_set_int(*s, "dst_format", outfmt, 0);
-            av_opt_set_int(*s, "sws_flags", scale->flags, 0);
-            av_opt_set_int(*s, "param0", scale->param[0], 0);
-            av_opt_set_int(*s, "param1", scale->param[1], 0);
+            av_opt_set_int(s, "srcw", inlink0 ->w, 0);
+            av_opt_set_int(s, "srch", inlink0 ->h >> !!i, 0);
+            av_opt_set_int(s, "src_format", inlink0->format, 0);
+            av_opt_set_int(s, "dstw", outlink->w, 0);
+            av_opt_set_int(s, "dsth", outlink->h >> !!i, 0);
+            av_opt_set_int(s, "dst_format", outfmt, 0);
+            av_opt_set_int(s, "sws_flags", scale->flags, 0);
+            av_opt_set_int(s, "param0", scale->param[0], 0);
+            av_opt_set_int(s, "param1", scale->param[1], 0);
             if (scale->in_range != AVCOL_RANGE_UNSPECIFIED)
-                av_opt_set_int(*s, "src_range",
+                av_opt_set_int(s, "src_range",
                                scale->in_range == AVCOL_RANGE_JPEG, 0);
             if (scale->out_range != AVCOL_RANGE_UNSPECIFIED)
-                av_opt_set_int(*s, "dst_range",
+                av_opt_set_int(s, "dst_range",
                                scale->out_range == AVCOL_RANGE_JPEG, 0);
 
             if (scale->opts) {
                 AVDictionaryEntry *e = NULL;
                 while ((e = av_dict_get(scale->opts, "", e, AV_DICT_IGNORE_SUFFIX))) {
-                    if ((ret = av_opt_set(*s, e->key, e->value, 0)) < 0)
+                    if ((ret = av_opt_set(s, e->key, e->value, 0)) < 0)
                         return ret;
                 }
             }
@@ -569,12 +569,12 @@ static int config_props(AVFilterLink *outlink)
                 out_v_chr_pos = (i == 0) ? 128 : (i == 1) ? 64 : 192;
             }
 
-            av_opt_set_int(*s, "src_h_chr_pos", scale->in_h_chr_pos, 0);
-            av_opt_set_int(*s, "src_v_chr_pos", in_v_chr_pos, 0);
-            av_opt_set_int(*s, "dst_h_chr_pos", scale->out_h_chr_pos, 0);
-            av_opt_set_int(*s, "dst_v_chr_pos", out_v_chr_pos, 0);
+            av_opt_set_int(s, "src_h_chr_pos", scale->in_h_chr_pos, 0);
+            av_opt_set_int(s, "src_v_chr_pos", in_v_chr_pos, 0);
+            av_opt_set_int(s, "dst_h_chr_pos", scale->out_h_chr_pos, 0);
+            av_opt_set_int(s, "dst_v_chr_pos", out_v_chr_pos, 0);
 
-            if ((ret = sws_init_context(*s, NULL, NULL)) < 0)
+            if ((ret = sws_init_context(s, NULL, NULL)) < 0)
                 return ret;
             if (!scale->interlaced)
                 break;
@@ -957,7 +957,6 @@ static const AVFilterPad avfilter_vf_scale_inputs[] = {
         .type         = AVMEDIA_TYPE_VIDEO,
         .filter_frame = filter_frame,
     },
-    { NULL }
 };
 
 static const AVFilterPad avfilter_vf_scale_outputs[] = {
@@ -966,7 +965,6 @@ static const AVFilterPad avfilter_vf_scale_outputs[] = {
         .type         = AVMEDIA_TYPE_VIDEO,
         .config_props = config_props,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_scale = {
@@ -977,8 +975,8 @@ const AVFilter ff_vf_scale = {
     .query_formats   = query_formats,
     .priv_size       = sizeof(ScaleContext),
     .priv_class      = &scale_class,
-    .inputs          = avfilter_vf_scale_inputs,
-    .outputs         = avfilter_vf_scale_outputs,
+    FILTER_INPUTS(avfilter_vf_scale_inputs),
+    FILTER_OUTPUTS(avfilter_vf_scale_outputs),
     .process_command = process_command,
 };
 
@@ -1002,7 +1000,6 @@ static const AVFilterPad avfilter_vf_scale2ref_inputs[] = {
         .type         = AVMEDIA_TYPE_VIDEO,
         .filter_frame = filter_frame_ref,
     },
-    { NULL }
 };
 
 static const AVFilterPad avfilter_vf_scale2ref_outputs[] = {
@@ -1018,7 +1015,6 @@ static const AVFilterPad avfilter_vf_scale2ref_outputs[] = {
         .config_props = config_props_ref,
         .request_frame= request_frame_ref,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_scale2ref = {
@@ -1029,7 +1025,7 @@ const AVFilter ff_vf_scale2ref = {
     .query_formats   = query_formats,
     .priv_size       = sizeof(ScaleContext),
     .priv_class      = &scale2ref_class,
-    .inputs          = avfilter_vf_scale2ref_inputs,
-    .outputs         = avfilter_vf_scale2ref_outputs,
+    FILTER_INPUTS(avfilter_vf_scale2ref_inputs),
+    FILTER_OUTPUTS(avfilter_vf_scale2ref_outputs),
     .process_command = process_command,
 };

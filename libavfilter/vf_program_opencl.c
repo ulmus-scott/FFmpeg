@@ -287,7 +287,7 @@ static av_cold int program_opencl_init(AVFilterContext *avctx)
 
             input.config_props = &ff_opencl_filter_config_input;
 
-            err = ff_insert_inpad(avctx, i, &input);
+            err = ff_append_inpad(avctx, &input);
             if (err < 0) {
                 av_freep(&input.name);
                 return err;
@@ -359,7 +359,6 @@ static const AVFilterPad program_opencl_outputs[] = {
         .type         = AVMEDIA_TYPE_VIDEO,
         .config_props = &program_opencl_config_output,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_program_opencl = {
@@ -367,13 +366,14 @@ const AVFilter ff_vf_program_opencl = {
     .description    = NULL_IF_CONFIG_SMALL("Filter video using an OpenCL program"),
     .priv_size      = sizeof(ProgramOpenCLContext),
     .priv_class     = &program_opencl_class,
+    .flags          = AVFILTER_FLAG_DYNAMIC_INPUTS,
     .preinit        = &program_opencl_framesync_preinit,
     .init           = &program_opencl_init,
     .uninit         = &program_opencl_uninit,
     .query_formats  = &ff_opencl_filter_query_formats,
     .activate       = &program_opencl_activate,
     .inputs         = NULL,
-    .outputs        = program_opencl_outputs,
+    FILTER_OUTPUTS(program_opencl_outputs),
     .flags_internal = FF_FILTER_FLAG_HWFRAME_AWARE,
 };
 
@@ -412,7 +412,6 @@ static const AVFilterPad openclsrc_outputs[] = {
         .config_props  = &program_opencl_config_output,
         .request_frame = &program_opencl_request_frame,
     },
-    { NULL }
 };
 
 const AVFilter ff_vsrc_openclsrc = {
@@ -424,7 +423,7 @@ const AVFilter ff_vsrc_openclsrc = {
     .uninit         = &program_opencl_uninit,
     .query_formats  = &ff_opencl_filter_query_formats,
     .inputs         = NULL,
-    .outputs        = openclsrc_outputs,
+    FILTER_OUTPUTS(openclsrc_outputs),
     .flags_internal = FF_FILTER_FLAG_HWFRAME_AWARE,
 };
 

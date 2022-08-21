@@ -100,7 +100,7 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_NONE
     };
 
-    return ff_set_common_formats(ctx, ff_make_format_list(pix_fmts));
+    return ff_set_common_formats_from_list(ctx, pix_fmts);
 }
 
 typedef struct ThreadData {
@@ -736,7 +736,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
 
     td.in = in;
     td.out = out;
-    ctx->internal->execute(ctx, filter_slice, &td, NULL, FFMIN3(s->planeheight[1], s->planewidth[1], s->nb_threads));
+    ff_filter_execute(ctx, filter_slice, &td, NULL,
+                      FFMIN3(s->planeheight[1], s->planewidth[1], s->nb_threads));
 
     av_frame_free(&in);
     return ff_filter_frame(outlink, out);
@@ -889,7 +890,6 @@ static const AVFilterPad convolution_inputs[] = {
         .config_props = config_input,
         .filter_frame = filter_frame,
     },
-    { NULL }
 };
 
 static const AVFilterPad convolution_outputs[] = {
@@ -897,7 +897,6 @@ static const AVFilterPad convolution_outputs[] = {
         .name = "default",
         .type = AVMEDIA_TYPE_VIDEO,
     },
-    { NULL }
 };
 
 #if CONFIG_CONVOLUTION_FILTER
@@ -909,8 +908,8 @@ const AVFilter ff_vf_convolution = {
     .priv_class    = &convolution_class,
     .init          = init,
     .query_formats = query_formats,
-    .inputs        = convolution_inputs,
-    .outputs       = convolution_outputs,
+    FILTER_INPUTS(convolution_inputs),
+    FILTER_OUTPUTS(convolution_outputs),
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .process_command = process_command,
 };
@@ -938,8 +937,8 @@ const AVFilter ff_vf_prewitt = {
     .priv_class    = &prewitt_class,
     .init          = init,
     .query_formats = query_formats,
-    .inputs        = convolution_inputs,
-    .outputs       = convolution_outputs,
+    FILTER_INPUTS(convolution_inputs),
+    FILTER_OUTPUTS(convolution_outputs),
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .process_command = process_command,
 };
@@ -958,8 +957,8 @@ const AVFilter ff_vf_sobel = {
     .priv_class    = &sobel_class,
     .init          = init,
     .query_formats = query_formats,
-    .inputs        = convolution_inputs,
-    .outputs       = convolution_outputs,
+    FILTER_INPUTS(convolution_inputs),
+    FILTER_OUTPUTS(convolution_outputs),
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .process_command = process_command,
 };
@@ -978,8 +977,8 @@ const AVFilter ff_vf_roberts = {
     .priv_class    = &roberts_class,
     .init          = init,
     .query_formats = query_formats,
-    .inputs        = convolution_inputs,
-    .outputs       = convolution_outputs,
+    FILTER_INPUTS(convolution_inputs),
+    FILTER_OUTPUTS(convolution_outputs),
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .process_command = process_command,
 };
@@ -998,8 +997,8 @@ const AVFilter ff_vf_kirsch = {
     .priv_class    = &kirsch_class,
     .init          = init,
     .query_formats = query_formats,
-    .inputs        = convolution_inputs,
-    .outputs       = convolution_outputs,
+    FILTER_INPUTS(convolution_inputs),
+    FILTER_OUTPUTS(convolution_outputs),
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .process_command = process_command,
 };

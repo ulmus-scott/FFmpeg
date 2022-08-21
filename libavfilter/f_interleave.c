@@ -167,13 +167,13 @@ static av_cold int init(AVFilterContext *ctx)
 
         switch (outpad->type) {
         case AVMEDIA_TYPE_VIDEO:
-            inpad.get_video_buffer = ff_null_get_video_buffer; break;
+            inpad.get_buffer.video = ff_null_get_video_buffer; break;
         case AVMEDIA_TYPE_AUDIO:
-            inpad.get_audio_buffer = ff_null_get_audio_buffer; break;
+            inpad.get_buffer.audio = ff_null_get_audio_buffer; break;
         default:
             av_assert0(0);
         }
-        if ((ret = ff_insert_inpad(ctx, i, &inpad)) < 0) {
+        if ((ret = ff_append_inpad(ctx, &inpad)) < 0) {
             av_freep(&inpad.name);
             return ret;
         }
@@ -235,7 +235,6 @@ static const AVFilterPad interleave_outputs[] = {
         .type          = AVMEDIA_TYPE_VIDEO,
         .config_props  = config_output,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_interleave = {
@@ -245,7 +244,7 @@ const AVFilter ff_vf_interleave = {
     .init        = init,
     .uninit      = uninit,
     .activate    = activate,
-    .outputs     = interleave_outputs,
+    FILTER_OUTPUTS(interleave_outputs),
     .priv_class  = &interleave_class,
     .flags       = AVFILTER_FLAG_DYNAMIC_INPUTS,
 };
@@ -263,7 +262,6 @@ static const AVFilterPad ainterleave_outputs[] = {
         .type          = AVMEDIA_TYPE_AUDIO,
         .config_props  = config_output,
     },
-    { NULL }
 };
 
 const AVFilter ff_af_ainterleave = {
@@ -273,7 +271,7 @@ const AVFilter ff_af_ainterleave = {
     .init        = init,
     .uninit      = uninit,
     .activate    = activate,
-    .outputs     = ainterleave_outputs,
+    FILTER_OUTPUTS(ainterleave_outputs),
     .priv_class  = &ainterleave_class,
     .flags       = AVFILTER_FLAG_DYNAMIC_INPUTS,
 };

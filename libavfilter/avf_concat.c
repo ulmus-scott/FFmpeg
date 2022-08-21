@@ -313,11 +313,13 @@ static av_cold int init(AVFilterContext *ctx)
             for (str = 0; str < cat->nb_streams[type]; str++) {
                 AVFilterPad pad = {
                     .type             = type,
-                    .get_video_buffer = get_video_buffer,
-                    .get_audio_buffer = get_audio_buffer,
                 };
+                if (type == AVMEDIA_TYPE_VIDEO)
+                    pad.get_buffer.video = get_video_buffer;
+                else
+                    pad.get_buffer.audio = get_audio_buffer;
                 pad.name = av_asprintf("in%d:%c%d", seg, "va"[type], str);
-                if ((ret = ff_insert_inpad(ctx, ctx->nb_inputs, &pad)) < 0) {
+                if ((ret = ff_append_inpad(ctx, &pad)) < 0) {
                     av_freep(&pad.name);
                     return ret;
                 }
@@ -332,7 +334,7 @@ static av_cold int init(AVFilterContext *ctx)
                 .config_props  = config_output,
             };
             pad.name = av_asprintf("out:%c%d", "va"[type], str);
-            if ((ret = ff_insert_outpad(ctx, ctx->nb_outputs, &pad)) < 0) {
+            if ((ret = ff_append_outpad(ctx, &pad)) < 0) {
                 av_freep(&pad.name);
                 return ret;
             }

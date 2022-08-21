@@ -247,10 +247,7 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_NONE
     };
 
-    AVFilterFormats *fmts_list = ff_make_format_list(s->alpha ? alpha_pix_fmts : pix_fmts);
-    if (!fmts_list)
-        return AVERROR(ENOMEM);
-    return ff_set_common_formats(ctx, fmts_list);
+    return ff_set_common_formats_from_list(ctx, s->alpha ? alpha_pix_fmts : pix_fmts);
 }
 
 #define DEFINE_REMAP1_LINE(bits, div)                                                    \
@@ -4890,7 +4887,7 @@ static int config_output(AVFilterLink *outlink)
 
     set_mirror_modifier(s->h_flip, s->v_flip, s->d_flip, s->output_mirror_modifier);
 
-    ctx->internal->execute(ctx, v360_slice, NULL, NULL, s->nb_threads);
+    ff_filter_execute(ctx, v360_slice, NULL, NULL, s->nb_threads);
 
     return 0;
 }
@@ -4913,7 +4910,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     td.in = in;
     td.out = out;
 
-    ctx->internal->execute(ctx, s->remap_slice, &td, NULL, s->nb_threads);
+    ff_filter_execute(ctx, s->remap_slice, &td, NULL, s->nb_threads);
 
     av_frame_free(&in);
     return ff_filter_frame(outlink, out);
@@ -4969,7 +4966,6 @@ static const AVFilterPad inputs[] = {
         .type         = AVMEDIA_TYPE_VIDEO,
         .filter_frame = filter_frame,
     },
-    { NULL }
 };
 
 static const AVFilterPad outputs[] = {
@@ -4978,7 +4974,6 @@ static const AVFilterPad outputs[] = {
         .type         = AVMEDIA_TYPE_VIDEO,
         .config_props = config_output,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_v360 = {
@@ -4988,8 +4983,8 @@ const AVFilter ff_vf_v360 = {
     .init          = init,
     .uninit        = uninit,
     .query_formats = query_formats,
-    .inputs        = inputs,
-    .outputs       = outputs,
+    FILTER_INPUTS(inputs),
+    FILTER_OUTPUTS(outputs),
     .priv_class    = &v360_class,
     .flags         = AVFILTER_FLAG_SLICE_THREADS,
     .process_command = process_command,

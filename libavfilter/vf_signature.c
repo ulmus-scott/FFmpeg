@@ -84,7 +84,7 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_NONE
     };
 
-    return ff_set_common_formats(ctx, ff_make_format_list(pix_fmts));
+    return ff_set_common_formats_from_list(ctx, pix_fmts);
 }
 
 static int config_input(AVFilterLink *inlink)
@@ -664,7 +664,7 @@ static av_cold int init(AVFilterContext *ctx)
 
         if (!pad.name)
             return AVERROR(ENOMEM);
-        if ((ret = ff_insert_inpad(ctx, i, &pad)) < 0) {
+        if ((ret = ff_append_inpad(ctx, &pad)) < 0) {
             av_freep(&pad.name);
             return ret;
         }
@@ -755,7 +755,6 @@ static const AVFilterPad signature_outputs[] = {
         .request_frame = request_frame,
         .config_props  = config_output,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_signature = {
@@ -766,7 +765,7 @@ const AVFilter ff_vf_signature = {
     .init          = init,
     .uninit        = uninit,
     .query_formats = query_formats,
-    .outputs       = signature_outputs,
+    FILTER_OUTPUTS(signature_outputs),
     .inputs        = NULL,
     .flags         = AVFILTER_FLAG_DYNAMIC_INPUTS,
 };

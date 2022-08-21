@@ -56,7 +56,7 @@ static av_cold int split_init(AVFilterContext *ctx)
         if (!pad.name)
             return AVERROR(ENOMEM);
 
-        if ((ret = ff_insert_outpad(ctx, i, &pad)) < 0) {
+        if ((ret = ff_append_outpad(ctx, &pad)) < 0) {
             av_freep(&pad.name);
             return ret;
         }
@@ -116,7 +116,6 @@ static const AVFilterPad avfilter_vf_split_inputs[] = {
         .type         = AVMEDIA_TYPE_VIDEO,
         .filter_frame = filter_frame,
     },
-    { NULL }
 };
 
 const AVFilter ff_vf_split = {
@@ -126,7 +125,7 @@ const AVFilter ff_vf_split = {
     .priv_class  = &split_class,
     .init        = split_init,
     .uninit      = split_uninit,
-    .inputs      = avfilter_vf_split_inputs,
+    FILTER_INPUTS(avfilter_vf_split_inputs),
     .outputs     = NULL,
     .flags       = AVFILTER_FLAG_DYNAMIC_OUTPUTS,
 };
@@ -137,7 +136,6 @@ static const AVFilterPad avfilter_af_asplit_inputs[] = {
         .type         = AVMEDIA_TYPE_AUDIO,
         .filter_frame = filter_frame,
     },
-    { NULL }
 };
 
 const AVFilter ff_af_asplit = {
@@ -147,7 +145,7 @@ const AVFilter ff_af_asplit = {
     .priv_class  = &asplit_class,
     .init        = split_init,
     .uninit      = split_uninit,
-    .inputs      = avfilter_af_asplit_inputs,
+    FILTER_INPUTS(avfilter_af_asplit_inputs),
     .outputs     = NULL,
     .flags       = AVFILTER_FLAG_DYNAMIC_OUTPUTS,
 };

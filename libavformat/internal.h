@@ -90,9 +90,21 @@ struct AVFormatInternal {
     /**
      * Packets split by the parser get queued here.
      */
-    AVPacket *parse_pkt;
     struct PacketList *parse_queue;
     struct PacketList *parse_queue_end;
+    /**
+     * The generic code uses this as a temporary packet
+     * to parse packets; it may also be used for other means
+     * for short periods that are guaranteed not to overlap
+     * with calls to av_read_frame() (or ff_read_packet())
+     * or with each other.
+     * It may be used by demuxers as a replacement for
+     * stack packets (unless they call one of the aforementioned
+     * functions with their own AVFormatContext).
+     * Every user has to ensure that this packet is blank
+     * after using it.
+     */
+    AVPacket *parse_pkt;
 
     /**
      * Used to hold temporary packets.
@@ -190,7 +202,6 @@ struct AVStreamInternal {
      * supported) */
     struct {
         AVBSFContext *bsf;
-        AVPacket     *pkt;
         int inited;
     } extract_extradata;
 
@@ -414,6 +425,14 @@ uint64_t ff_ntp_time(void);
  * @return the formatted NTP time stamp
  */
 uint64_t ff_get_formatted_ntp_time(uint64_t ntp_time_us);
+
+/**
+ * Parse the NTP time in micro seconds (since NTP epoch).
+ *
+ * @param ntp_ts NTP time stamp formatted as per the RFC-5905.
+ * @return the time in micro seconds (since NTP epoch)
+ */
+uint64_t ff_parse_ntp_time(uint64_t ntp_ts);
 
 /**
  * Append the media-specific SDP fragment for the media stream c

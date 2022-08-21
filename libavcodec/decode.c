@@ -2026,10 +2026,50 @@ FF_DISABLE_DEPRECATION_WARNINGS
 FF_ENABLE_DEPRECATION_WARNINGS
 #endif
 
+    if (avctx->codec_type == AVMEDIA_TYPE_AUDIO && avctx->channels == 0 &&
+        !(avctx->codec->capabilities & AV_CODEC_CAP_CHANNEL_CONF)) {
+        av_log(avctx, AV_LOG_ERROR, "Decoder requires channel count but channels not set\n");
+        return AVERROR(EINVAL);
+    }
     if (avctx->codec->max_lowres < avctx->lowres || avctx->lowres < 0) {
         av_log(avctx, AV_LOG_WARNING, "The maximum value for lowres supported by the decoder is %d\n",
                avctx->codec->max_lowres);
         avctx->lowres = avctx->codec->max_lowres;
+    }
+    if (avctx->sub_charenc) {
+        if (avctx->codec_type != AVMEDIA_TYPE_SUBTITLE) {
+            av_log(avctx, AV_LOG_ERROR, "Character encoding is only "
+                   "supported with subtitles codecs\n");
+            return AVERROR(EINVAL);
+        } else if (avctx->codec_descriptor->props & AV_CODEC_PROP_BITMAP_SUB) {
+            av_log(avctx, AV_LOG_WARNING, "Codec '%s' is bitmap-based, "
+                   "subtitles character encoding will be ignored\n",
+                   avctx->codec_descriptor->name);
+            avctx->sub_charenc_mode = FF_SUB_CHARENC_MODE_DO_NOTHING;
+        } else {
+            /* input character encoding is set for a text based subtitle
+             * codec at this point */
+            if (avctx->sub_charenc_mode == FF_SUB_CHARENC_MODE_AUTOMATIC)
+                avctx->sub_charenc_mode = FF_SUB_CHARENC_MODE_PRE_DECODER;
+
+            if (avctx->sub_charenc_mode == FF_SUB_CHARENC_MODE_PRE_DECODER) {
+#if CONFIG_ICONV
+                iconv_t cd = iconv_open("UTF-8", avctx->sub_charenc);
+                if (cd == (iconv_t)-1) {
+                    ret = AVERROR(errno);
+                    av_log(avctx, AV_LOG_ERROR, "Unable to open iconv context "
+                           "with input character encoding \"%s\"\n", avctx->sub_charenc);
+                    return ret;
+                }
+                iconv_close(cd);
+#else
+                av_log(avctx, AV_LOG_ERROR, "Character encoding subtitles "
+                       "conversion needs a libavcodec built with iconv support "
+                       "for this codec\n");
+                return AVERROR(ENOSYS);
+#endif
+            }
+        }
     }
 
     avctx->pts_correction_num_faulty_pts =
@@ -2049,5 +2089,19 @@ FF_ENABLE_DEPRECATION_WARNINGS
     if (ret < 0)
         return ret;
 
+    return 0;
+}
+
+int ff_copy_palette(void *dst, const AVPacket *src, void *logctx)
+{
+    buffer_size_t size;
+    const void *pal = av_packet_get_side_data(src, AV_PKT_DATA_PALETTE, &size);
+
+    if (pal && size == AVPALETTE_SIZE) {
+        memcpy(dst, pal, AVPALETTE_SIZE);
+        return 1;
+    } else if (pal) {
+        av_log(logctx, AV_LOG_ERROR, "Palette size %d is wrong\n", size);
+    }
     return 0;
 }

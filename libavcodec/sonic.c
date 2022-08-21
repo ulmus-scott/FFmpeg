@@ -22,6 +22,7 @@
 #include "config_components.h"
 
 #include "avcodec.h"
+#include "codec_internal.h"
 #include "encode.h"
 #include "get_bits.h"
 #include "golomb.h"
@@ -1009,7 +1010,7 @@ static int sonic_decode_frame(AVCodecContext *avctx,
 
     // dequantize
     for (i = 0; i < s->num_taps; i++)
-        s->predictor_k[i] *= s->tap_quant[i];
+        s->predictor_k[i] *= (unsigned) s->tap_quant[i];
 
     if (s->lossless)
         quant = 1;
@@ -1077,47 +1078,47 @@ static int sonic_decode_frame(AVCodecContext *avctx,
     return buf_size;
 }
 
-const AVCodec ff_sonic_decoder = {
-    .name           = "sonic",
-    .long_name      = NULL_IF_CONFIG_SMALL("Sonic"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_SONIC,
+const FFCodec ff_sonic_decoder = {
+    .p.name         = "sonic",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Sonic"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_SONIC,
     .priv_data_size = sizeof(SonicContext),
     .init           = sonic_decode_init,
     .close          = sonic_decode_close,
     .decode         = sonic_decode_frame,
-    .capabilities   = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_EXPERIMENTAL | AV_CODEC_CAP_CHANNEL_CONF,
+    .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_EXPERIMENTAL | AV_CODEC_CAP_CHANNEL_CONF,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };
 #endif /* CONFIG_SONIC_DECODER */
 
 #if CONFIG_SONIC_ENCODER
-const AVCodec ff_sonic_encoder = {
-    .name           = "sonic",
-    .long_name      = NULL_IF_CONFIG_SMALL("Sonic"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_SONIC,
+const FFCodec ff_sonic_encoder = {
+    .p.name         = "sonic",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Sonic"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_SONIC,
     .priv_data_size = sizeof(SonicContext),
     .init           = sonic_encode_init,
     .encode2        = sonic_encode_frame,
-    .sample_fmts    = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE },
-    .capabilities   = AV_CODEC_CAP_EXPERIMENTAL,
+    .p.sample_fmts  = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE },
+    .p.capabilities = AV_CODEC_CAP_EXPERIMENTAL,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
     .close          = sonic_encode_close,
 };
 #endif
 
 #if CONFIG_SONIC_LS_ENCODER
-const AVCodec ff_sonic_ls_encoder = {
-    .name           = "sonicls",
-    .long_name      = NULL_IF_CONFIG_SMALL("Sonic lossless"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_SONIC_LS,
+const FFCodec ff_sonic_ls_encoder = {
+    .p.name         = "sonicls",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Sonic lossless"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_SONIC_LS,
     .priv_data_size = sizeof(SonicContext),
     .init           = sonic_encode_init,
     .encode2        = sonic_encode_frame,
-    .sample_fmts    = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE },
-    .capabilities   = AV_CODEC_CAP_EXPERIMENTAL,
+    .p.sample_fmts  = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE },
+    .p.capabilities = AV_CODEC_CAP_EXPERIMENTAL,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
     .close          = sonic_encode_close,
 };

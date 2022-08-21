@@ -32,8 +32,6 @@
 #define C       (M_LN10 * 0.1)
 #define SOLVE_SIZE (5)
 #define NB_PROFILE_BANDS (15)
-#define SFM_FLAGS_SIZE (512)
-#define SFM_FLAGS_MASK (SFM_FLAGS_SIZE - 1)
 
 enum SampleNoiseModes {
     SAMPLE_NONE,
@@ -119,14 +117,9 @@ typedef struct AudioFFTDeNoiseContext {
     float   band_multiplier;
     float   floor_offset;
 
-    float   last_residual_floor;
-    float   last_noise_floor;
-    float   last_noise_reduction;
-    float   last_noise_balance;
-    int64_t block_count;
-
     int     channels;
     int     sample_noise;
+    int     sample_noise_blocks;
     int     sample_noise_mode;
     float   sample_rate;
     int     buffer_length;
@@ -914,58 +907,39 @@ static void finish_sample_noise(AudioFFTDeNoiseContext *s,
 
 static void set_noise_profile(AudioFFTDeNoiseContext *s,
                               DeNoiseChannel *dnch,
-                              double *sample_noise,
-                              int new_profile)
+                              double *sample_noise)
 {
     double new_band_noise[NB_PROFILE_BANDS];
     double temp[NB_PROFILE_BANDS];
-    double sum = 0.0, d1;
-    float new_noise_floor;
-    int i = 0, n;
+    double sum = 0.0;
 
     for (int m = 0; m < NB_PROFILE_BANDS; m++)
         temp[m] = sample_noise[m];
 
-    if (new_profile) {
-        for (int m = 0; m < SOLVE_SIZE; m++) {
-            sum = 0.0;
-            for (n = 0; n < NB_PROFILE_BANDS; n++)
-                sum += s->matrix_b[i++] * temp[n];
-            s->vector_b[m] = sum;
-        }
-        solve(s->matrix_a, s->vector_b, SOLVE_SIZE);
-        i = 0;
-        for (int m = 0; m < NB_PROFILE_BANDS; m++) {
-            sum = 0.0;
-            for (n = 0; n < SOLVE_SIZE; n++)
-                sum += s->matrix_c[i++] * s->vector_b[n];
-            temp[m] = sum;
-        }
+    for (int m = 0, i = 0; m < SOLVE_SIZE; m++) {
+        sum = 0.0;
+        for (int n = 0; n < NB_PROFILE_BANDS; n++)
+            sum += s->matrix_b[i++] * temp[n];
+        s->vector_b[m] = sum;
+    }
+    solve(s->matrix_a, s->vector_b, SOLVE_SIZE);
+    for (int m = 0, i = 0; m < NB_PROFILE_BANDS; m++) {
+        sum = 0.0;
+        for (int n = 0; n < SOLVE_SIZE; n++)
+            sum += s->matrix_c[i++] * s->vector_b[n];
+        temp[m] = sum;
     }
 
-    sum = 0.0;
-    for (int m = 0; m < NB_PROFILE_BANDS; m++)
-        sum += temp[m];
+    reduce_mean(temp);
 
-    d1 = sum / NB_PROFILE_BANDS;
-    for (int m = 0; m < NB_PROFILE_BANDS; m++)
-        temp[m] -= d1;
-
-    new_noise_floor = d1;
-
-    if (new_profile) {
-        av_log(s, AV_LOG_INFO, "bn=");
-        for (int m = 0; m < NB_PROFILE_BANDS; m++) {
-            new_band_noise[m] = temp[m];
-            new_band_noise[m] = av_clipd(new_band_noise[m], -24.0, 24.0);
-            av_log(s, AV_LOG_INFO, "%f ", new_band_noise[m]);
-        }
-        av_log(s, AV_LOG_INFO, "\n");
-        memcpy(dnch->band_noise, new_band_noise, sizeof(new_band_noise));
+    av_log(s, AV_LOG_INFO, "bn=");
+    for (int m = 0; m < NB_PROFILE_BANDS; m++) {
+        new_band_noise[m] = temp[m];
+        new_band_noise[m] = av_clipd(new_band_noise[m], -24.0, 24.0);
+        av_log(s, AV_LOG_INFO, "%f ", new_band_noise[m]);
     }
-
-    if (s->track_noise)
-        dnch->noise_floor = new_noise_floor;
+    av_log(s, AV_LOG_INFO, "\n");
+    memcpy(dnch->band_noise, new_band_noise, sizeof(new_band_noise));
 }
 
 static int filter_channel(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
@@ -1060,6 +1034,7 @@ static int output_frame(AVFilterLink *inlink, AVFrame *in)
         }
         s->sample_noise_mode = SAMPLE_NONE;
         s->sample_noise = 1;
+        s->sample_noise_blocks = 0;
     }
 
     if (s->sample_noise) {
@@ -1068,6 +1043,7 @@ static int output_frame(AVFilterLink *inlink, AVFrame *in)
 
             sample_noise_block(s, dnch, s->winframe, ch);
         }
+        s->sample_noise_blocks++;
     }
 
     if (s->sample_noise_mode == SAMPLE_STOP) {
@@ -1075,15 +1051,17 @@ static int output_frame(AVFilterLink *inlink, AVFrame *in)
             DeNoiseChannel *dnch = &s->dnch[ch];
             double sample_noise[NB_PROFILE_BANDS];
 
+            if (s->sample_noise_blocks <= 0)
+                break;
             finish_sample_noise(s, dnch, sample_noise);
-            set_noise_profile(s, dnch, sample_noise, 1);
+            set_noise_profile(s, dnch, sample_noise);
             set_parameters(s, dnch, 1, 1);
         }
         s->sample_noise = 0;
+        s->sample_noise_blocks = 0;
         s->sample_noise_mode = SAMPLE_NONE;
     }
 
-    s->block_count++;
     ff_filter_execute(ctx, filter_channel, s->winframe, NULL,
                       FFMIN(outlink->ch_layout.nb_channels, ff_filter_get_nb_threads(ctx)));
 

@@ -34,9 +34,9 @@
 
 #include "avcodec.h"
 #include "celp_math.h"
+#include "codec_internal.h"
 #include "encode.h"
 #include "g723_1.h"
-#include "internal.h"
 
 #define BITSTREAM_WRITER_LE
 #include "put_bits.h"
@@ -1233,25 +1233,25 @@ static int g723_1_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
     return 0;
 }
 
-static const AVCodecDefault defaults[] = {
+static const FFCodecDefault defaults[] = {
     { "b", "6300" },
     { NULL },
 };
 
-const AVCodec ff_g723_1_encoder = {
-    .name           = "g723_1",
-    .long_name      = NULL_IF_CONFIG_SMALL("G.723.1"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_G723_1,
-    .capabilities   = AV_CODEC_CAP_DR1,
+const FFCodec ff_g723_1_encoder = {
+    .p.name         = "g723_1",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("G.723.1"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_G723_1,
+    .p.capabilities = AV_CODEC_CAP_DR1,
     .priv_data_size = sizeof(G723_1_Context),
     .init           = g723_1_encode_init,
     .encode2        = g723_1_encode_frame,
     .defaults       = defaults,
-    .sample_fmts    = (const enum AVSampleFormat[]) {
+    .p.sample_fmts  = (const enum AVSampleFormat[]) {
         AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE
     },
-    .ch_layouts     = (const AVChannelLayout[]){
+    .p.ch_layouts   = (const AVChannelLayout[]){
         AV_CHANNEL_LAYOUT_MONO, { 0 }
     },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,

@@ -27,6 +27,8 @@
 
 #include "libavutil/intreadwrite.h"
 #include "libavutil/mem_internal.h"
+#include "libavutil/reverse.h"
+#include "codec_internal.h"
 #include "internal.h"
 #include "get_bits.h"
 #include "avcodec.h"
@@ -378,16 +380,16 @@ dsd:
     return avpkt->size;
 }
 
-const AVCodec ff_dst_decoder = {
-    .name           = "dst",
-    .long_name      = NULL_IF_CONFIG_SMALL("DST (Digital Stream Transfer)"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_DST,
+const FFCodec ff_dst_decoder = {
+    .p.name         = "dst",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("DST (Digital Stream Transfer)"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_DST,
     .priv_data_size = sizeof(DSTContext),
     .init           = decode_init,
     .decode         = decode_frame,
-    .capabilities   = AV_CODEC_CAP_DR1,
-    .sample_fmts    = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLT,
+    .p.capabilities = AV_CODEC_CAP_DR1,
+    .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLT,
                                                       AV_SAMPLE_FMT_NONE },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

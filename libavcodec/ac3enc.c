@@ -38,6 +38,7 @@
 #include "libavutil/opt.h"
 #include "libavutil/thread.h"
 #include "avcodec.h"
+#include "codec_internal.h"
 #include "config_components.h"
 #include "encode.h"
 #include "internal.h"
@@ -133,7 +134,7 @@ const AVClass ff_ac3enc_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-const AVCodecDefault ff_ac3_enc_defaults[] = {
+const FFCodecDefault ff_ac3_enc_defaults[] = {
     { "b",  "0" },
     { NULL }
 };

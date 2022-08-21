@@ -89,8 +89,8 @@
 #include "libavutil/common.h"
 #include "libavutil/opt.h"
 #include "avcodec.h"
+#include "codec_internal.h"
 #include "encode.h"
-#include "internal.h"
 #include "audio_frame_queue.h"
 
 /* TODO: Think about converting abr, vad, dtx and such flags to a bit field */
@@ -342,35 +342,35 @@ static const AVClass speex_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-static const AVCodecDefault defaults[] = {
+static const FFCodecDefault defaults[] = {
     { "b",                 "0" },
     { "compression_level", "3" },
     { NULL },
 };
 
-const AVCodec ff_libspeex_encoder = {
-    .name           = "libspeex",
-    .long_name      = NULL_IF_CONFIG_SMALL("libspeex Speex"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_SPEEX,
+const FFCodec ff_libspeex_encoder = {
+    .p.name         = "libspeex",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("libspeex Speex"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_SPEEX,
     .priv_data_size = sizeof(LibSpeexEncContext),
     .init           = encode_init,
     .encode2        = encode_frame,
     .close          = encode_close,
-    .capabilities   = AV_CODEC_CAP_DELAY,
-    .sample_fmts    = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16,
+    .p.capabilities = AV_CODEC_CAP_DELAY,
+    .p.sample_fmts  = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16,
                                                      AV_SAMPLE_FMT_NONE },
 #if FF_API_OLD_CHANNEL_LAYOUT
-    .channel_layouts = (const uint64_t[]){ AV_CH_LAYOUT_MONO,
+    .p.channel_layouts = (const uint64_t[]){ AV_CH_LAYOUT_MONO,
                                            AV_CH_LAYOUT_STEREO,
                                            0 },
 #endif
-    .ch_layouts      = (const AVChannelLayout[]) { AV_CHANNEL_LAYOUT_MONO,
+    .p.ch_layouts    = (const AVChannelLayout[]) { AV_CHANNEL_LAYOUT_MONO,
                                                    AV_CHANNEL_LAYOUT_STEREO,
                                                    { 0 },
     },
-    .supported_samplerates = (const int[]){ 8000, 16000, 32000, 0 },
-    .priv_class     = &speex_class,
+    .p.supported_samplerates = (const int[]){ 8000, 16000, 32000, 0 },
+    .p.priv_class   = &speex_class,
     .defaults       = defaults,
-    .wrapper_name   = "libspeex",
+    .p.wrapper_name = "libspeex",
 };

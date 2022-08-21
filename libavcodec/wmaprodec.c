@@ -97,6 +97,7 @@
 #include "libavutil/thread.h"
 
 #include "avcodec.h"
+#include "codec_internal.h"
 #include "internal.h"
 #include "get_bits.h"
 #include "put_bits.h"
@@ -402,7 +403,7 @@ static av_cold int decode_init(WMAProDecodeCtx *s, AVCodecContext *avctx, int nu
         s->decode_flags    = AV_RL16(edata_ptr+14);
         channel_mask       = AV_RL32(edata_ptr+2);
         s->bits_per_sample = AV_RL16(edata_ptr);
-        s->nb_channels     = avctx->ch_layout.nb_channels;
+        s->nb_channels     = channel_mask ? av_popcount(channel_mask) : avctx->ch_layout.nb_channels;
 
         if (s->bits_per_sample > 32 || s->bits_per_sample < 1) {
             avpriv_request_sample(avctx, "bits per sample is %d", s->bits_per_sample);
@@ -2086,49 +2087,49 @@ static void xma_flush(AVCodecContext *avctx)
 /**
  *@brief wmapro decoder
  */
-const AVCodec ff_wmapro_decoder = {
-    .name           = "wmapro",
-    .long_name      = NULL_IF_CONFIG_SMALL("Windows Media Audio 9 Professional"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_WMAPRO,
+const FFCodec ff_wmapro_decoder = {
+    .p.name         = "wmapro",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Windows Media Audio 9 Professional"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_WMAPRO,
     .priv_data_size = sizeof(WMAProDecodeCtx),
     .init           = wmapro_decode_init,
     .close          = wmapro_decode_end,
     .decode         = wmapro_decode_packet,
-    .capabilities   = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1,
+    .p.capabilities = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1,
     .flush          = wmapro_flush,
-    .sample_fmts    = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
+    .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
                                                       AV_SAMPLE_FMT_NONE },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };
 
-const AVCodec ff_xma1_decoder = {
-    .name           = "xma1",
-    .long_name      = NULL_IF_CONFIG_SMALL("Xbox Media Audio 1"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_XMA1,
+const FFCodec ff_xma1_decoder = {
+    .p.name         = "xma1",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Xbox Media Audio 1"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_XMA1,
     .priv_data_size = sizeof(XMADecodeCtx),
     .init           = xma_decode_init,
     .close          = xma_decode_end,
     .decode         = xma_decode_packet,
-    .capabilities   = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
-    .sample_fmts    = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
+    .p.capabilities = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
+    .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
                                                       AV_SAMPLE_FMT_NONE },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };
 
-const AVCodec ff_xma2_decoder = {
-    .name           = "xma2",
-    .long_name      = NULL_IF_CONFIG_SMALL("Xbox Media Audio 2"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_XMA2,
+const FFCodec ff_xma2_decoder = {
+    .p.name         = "xma2",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Xbox Media Audio 2"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_XMA2,
     .priv_data_size = sizeof(XMADecodeCtx),
     .init           = xma_decode_init,
     .close          = xma_decode_end,
     .decode         = xma_decode_packet,
     .flush          = xma_flush,
-    .capabilities   = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
-    .sample_fmts    = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
+    .p.capabilities = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
+    .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
                                                       AV_SAMPLE_FMT_NONE },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };

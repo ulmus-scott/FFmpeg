@@ -31,6 +31,7 @@
 #include "libavutil/pixdesc.h"
 #include "libavutil/avassert.h"
 
+#include "codec_internal.h"
 #include "internal.h"
 #include "encode.h"
 #include "packet_internal.h"
@@ -226,6 +227,16 @@ static int config_enc_params(EbSvtAv1EncConfiguration *param,
         av_log(avctx, AV_LOG_ERROR , "Unsupported pixel format\n");
         return AVERROR(EINVAL);
     }
+
+    param->color_primaries          = avctx->color_primaries;
+    param->matrix_coefficients      = (desc->flags & AV_PIX_FMT_FLAG_RGB) ?
+                                      AVCOL_SPC_RGB : avctx->colorspace;
+    param->transfer_characteristics = avctx->color_trc;
+
+    if (avctx->color_range != AVCOL_RANGE_UNSPECIFIED)
+        param->color_range = avctx->color_range == AVCOL_RANGE_JPEG;
+    else
+        param->color_range = !!(desc->flags & AV_PIX_FMT_FLAG_RGB);
 
     if (avctx->profile != FF_PROFILE_UNKNOWN)
         param->profile = avctx->profile;
@@ -587,7 +598,7 @@ static const AVClass class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-static const AVCodecDefault eb_enc_defaults[] = {
+static const FFCodecDefault eb_enc_defaults[] = {
     { "b",         "0"    },
     { "flags",     "+cgop" },
     { "g",         "-1"    },
@@ -596,21 +607,21 @@ static const AVCodecDefault eb_enc_defaults[] = {
     { NULL },
 };
 
-const AVCodec ff_libsvtav1_encoder = {
-    .name           = "libsvtav1",
-    .long_name      = NULL_IF_CONFIG_SMALL("SVT-AV1(Scalable Video Technology for AV1) encoder"),
+const FFCodec ff_libsvtav1_encoder = {
+    .p.name         = "libsvtav1",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("SVT-AV1(Scalable Video Technology for AV1) encoder"),
     .priv_data_size = sizeof(SvtContext),
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = AV_CODEC_ID_AV1,
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_AV1,
     .init           = eb_enc_init,
     .receive_packet = eb_receive_packet,
     .close          = eb_enc_close,
-    .capabilities   = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS,
+    .p.capabilities = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS,
     .caps_internal  = FF_CODEC_CAP_AUTO_THREADS | FF_CODEC_CAP_INIT_CLEANUP,
-    .pix_fmts       = (const enum AVPixelFormat[]){ AV_PIX_FMT_YUV420P,
+    .p.pix_fmts     = (const enum AVPixelFormat[]){ AV_PIX_FMT_YUV420P,
                                                     AV_PIX_FMT_YUV420P10,
                                                     AV_PIX_FMT_NONE },
-    .priv_class     = &class,
+    .p.priv_class   = &class,
     .defaults       = eb_enc_defaults,
-    .wrapper_name   = "libsvtav1",
+    .p.wrapper_name = "libsvtav1",
 };

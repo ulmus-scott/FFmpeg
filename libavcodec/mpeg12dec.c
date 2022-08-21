@@ -34,10 +34,12 @@
 #include "libavutil/imgutils.h"
 #include "libavutil/internal.h"
 #include "libavutil/mem_internal.h"
+#include "libavutil/reverse.h"
 #include "libavutil/stereo3d.h"
 #include "libavutil/timecode.h"
 
 #include "avcodec.h"
+#include "codec_internal.h"
 #include "error_resilience.h"
 #include "hwconfig.h"
 #include "idctdsp.h"
@@ -3049,16 +3051,16 @@ static av_cold int mpeg_decode_end(AVCodecContext *avctx)
     return 0;
 }
 
-const AVCodec ff_mpeg1video_decoder = {
-    .name                  = "mpeg1video",
-    .long_name             = NULL_IF_CONFIG_SMALL("MPEG-1 video"),
-    .type                  = AVMEDIA_TYPE_VIDEO,
-    .id                    = AV_CODEC_ID_MPEG1VIDEO,
+const FFCodec ff_mpeg1video_decoder = {
+    .p.name                = "mpeg1video",
+    .p.long_name           = NULL_IF_CONFIG_SMALL("MPEG-1 video"),
+    .p.type                = AVMEDIA_TYPE_VIDEO,
+    .p.id                  = AV_CODEC_ID_MPEG1VIDEO,
     .priv_data_size        = sizeof(Mpeg1Context),
     .init                  = mpeg_decode_init,
     .close                 = mpeg_decode_end,
     .decode                = mpeg_decode_frame,
-    .capabilities          = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1 |
+    .p.capabilities        = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1 |
 #if FF_API_FLAG_TRUNCATED
                              AV_CODEC_CAP_TRUNCATED |
 #endif
@@ -3066,7 +3068,7 @@ const AVCodec ff_mpeg1video_decoder = {
     .caps_internal         = FF_CODEC_CAP_INIT_THREADSAFE |
                              FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM,
     .flush                 = flush,
-    .max_lowres            = 3,
+    .p.max_lowres          = 3,
     .update_thread_context = ONLY_IF_THREADS_ENABLED(mpeg_decode_update_thread_context),
     .hw_configs            = (const AVCodecHWConfigInternal *const []) {
 #if CONFIG_MPEG1_NVDEC_HWACCEL
@@ -3082,16 +3084,16 @@ const AVCodec ff_mpeg1video_decoder = {
                            },
 };
 
-const AVCodec ff_mpeg2video_decoder = {
-    .name           = "mpeg2video",
-    .long_name      = NULL_IF_CONFIG_SMALL("MPEG-2 video"),
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = AV_CODEC_ID_MPEG2VIDEO,
+const FFCodec ff_mpeg2video_decoder = {
+    .p.name         = "mpeg2video",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("MPEG-2 video"),
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_MPEG2VIDEO,
     .priv_data_size = sizeof(Mpeg1Context),
     .init           = mpeg_decode_init,
     .close          = mpeg_decode_end,
     .decode         = mpeg_decode_frame,
-    .capabilities   = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1 |
+    .p.capabilities = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1 |
 #if FF_API_FLAG_TRUNCATED
                       AV_CODEC_CAP_TRUNCATED |
 #endif
@@ -3099,8 +3101,8 @@ const AVCodec ff_mpeg2video_decoder = {
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE |
                       FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM,
     .flush          = flush,
-    .max_lowres     = 3,
-    .profiles       = NULL_IF_CONFIG_SMALL(ff_mpeg2_video_profiles),
+    .p.max_lowres   = 3,
+    .p.profiles     = NULL_IF_CONFIG_SMALL(ff_mpeg2_video_profiles),
     .hw_configs     = (const AVCodecHWConfigInternal *const []) {
 #if CONFIG_MPEG2_DXVA2_HWACCEL
                         HWACCEL_DXVA2(mpeg2),
@@ -3128,16 +3130,16 @@ const AVCodec ff_mpeg2video_decoder = {
 };
 
 //legacy decoder
-const AVCodec ff_mpegvideo_decoder = {
-    .name           = "mpegvideo",
-    .long_name      = NULL_IF_CONFIG_SMALL("MPEG-1 video"),
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = AV_CODEC_ID_MPEG2VIDEO,
+const FFCodec ff_mpegvideo_decoder = {
+    .p.name         = "mpegvideo",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("MPEG-1 video"),
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_MPEG2VIDEO,
     .priv_data_size = sizeof(Mpeg1Context),
     .init           = mpeg_decode_init,
     .close          = mpeg_decode_end,
     .decode         = mpeg_decode_frame,
-    .capabilities   = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1 |
+    .p.capabilities = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1 |
 #if FF_API_FLAG_TRUNCATED
                       AV_CODEC_CAP_TRUNCATED |
 #endif
@@ -3145,7 +3147,7 @@ const AVCodec ff_mpegvideo_decoder = {
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE |
                       FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM,
     .flush          = flush,
-    .max_lowres     = 3,
+    .p.max_lowres   = 3,
 };
 
 typedef struct IPUContext {
@@ -3294,15 +3296,15 @@ static av_cold int ipu_decode_end(AVCodecContext *avctx)
     return 0;
 }
 
-const AVCodec ff_ipu_decoder = {
-    .name           = "ipu",
-    .long_name      = NULL_IF_CONFIG_SMALL("IPU Video"),
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = AV_CODEC_ID_IPU,
+const FFCodec ff_ipu_decoder = {
+    .p.name         = "ipu",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("IPU Video"),
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_IPU,
     .priv_data_size = sizeof(IPUContext),
     .init           = ipu_decode_init,
     .decode         = ipu_decode_frame,
     .close          = ipu_decode_end,
-    .capabilities   = AV_CODEC_CAP_DR1,
+    .p.capabilities = AV_CODEC_CAP_DR1,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };

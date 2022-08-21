@@ -62,6 +62,7 @@
 #include "libpostproc/version.h"
 #include "libavfilter/version.h"
 #include "cmdutils.h"
+#include "opt_common.h"
 
 #include "libavutil/thread.h"
 
@@ -3621,22 +3622,6 @@ static int opt_show_entries(void *optctx, const char *opt, const char *arg)
     return ret;
 }
 
-static int opt_show_format_entry(void *optctx, const char *opt, const char *arg)
-{
-    char *buf = av_asprintf("format=%s", arg);
-    int ret;
-
-    if (!buf)
-        return AVERROR(ENOMEM);
-
-    av_log(NULL, AV_LOG_WARNING,
-           "Option '%s' is deprecated, use '-show_entries format=%s' instead\n",
-           opt, arg);
-    ret = opt_show_entries(optctx, opt, buf);
-    av_free(buf);
-    return ret;
-}
-
 static void opt_input_file(void *optctx, const char *arg)
 {
     if (input_filename) {
@@ -3897,8 +3882,6 @@ static const OptionDef real_options[] = {
     { "show_error",   0, { .func_arg = &opt_show_error },  "show probing error" },
     { "show_format",  0, { .func_arg = &opt_show_format }, "show format/container info" },
     { "show_frames",  0, { .func_arg = &opt_show_frames }, "show frames info" },
-    { "show_format_entry", HAS_ARG, {.func_arg = opt_show_format_entry},
-      "show a particular entry from the format/container info", "entry" },
     { "show_entries", HAS_ARG, {.func_arg = opt_show_entries},
       "show a set of specified entries", "entry_list" },
 #if HAVE_THREADS
@@ -3919,7 +3902,6 @@ static const OptionDef real_options[] = {
     { "private",           OPT_BOOL, { &show_private_data }, "same as show_private_data" },
     { "bitexact", OPT_BOOL, {&do_bitexact}, "force bitexact output" },
     { "read_intervals", HAS_ARG, {.func_arg = opt_read_intervals}, "set read intervals", "read_intervals" },
-    { "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT, {.func_arg = opt_default}, "generic catch all option", "" },
     { "i", HAS_ARG, {.func_arg = opt_input_file_i}, "read specified file", "input_file"},
     { "print_filename", HAS_ARG, {.func_arg = opt_print_filename}, "override the printed input filename", "print_file"},
     { "find_stream_info", OPT_BOOL | OPT_INPUT | OPT_EXPERT, { &find_stream_info },

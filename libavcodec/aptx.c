@@ -21,6 +21,7 @@
  */
 
 #include "aptx.h"
+#include "mathops.h"
 
 
 static const int32_t quantize_intervals_LF[65] = {

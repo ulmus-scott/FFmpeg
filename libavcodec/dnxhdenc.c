@@ -30,9 +30,10 @@
 
 #include "avcodec.h"
 #include "blockdsp.h"
+#include "codec_internal.h"
 #include "encode.h"
 #include "fdctdsp.h"
-#include "internal.h"
+#include "mathops.h"
 #include "mpegvideo.h"
 #include "mpegvideoenc.h"
 #include "pixblockdsp.h"
@@ -1346,31 +1347,31 @@ static av_cold int dnxhd_encode_end(AVCodecContext *avctx)
     return 0;
 }
 
-static const AVCodecDefault dnxhd_defaults[] = {
+static const FFCodecDefault dnxhd_defaults[] = {
     { "qmax", "1024" }, /* Maximum quantization scale factor allowed for VC-3 */
     { NULL },
 };
 
-const AVCodec ff_dnxhd_encoder = {
-    .name           = "dnxhd",
-    .long_name      = NULL_IF_CONFIG_SMALL("VC3/DNxHD"),
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = AV_CODEC_ID_DNXHD,
-    .capabilities   = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_FRAME_THREADS |
+const FFCodec ff_dnxhd_encoder = {
+    .p.name         = "dnxhd",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("VC3/DNxHD"),
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_DNXHD,
+    .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_FRAME_THREADS |
                       AV_CODEC_CAP_SLICE_THREADS,
     .priv_data_size = sizeof(DNXHDEncContext),
     .init           = dnxhd_encode_init,
     .encode2        = dnxhd_encode_picture,
     .close          = dnxhd_encode_end,
-    .pix_fmts       = (const enum AVPixelFormat[]) {
+    .p.pix_fmts     = (const enum AVPixelFormat[]) {
         AV_PIX_FMT_YUV422P,
         AV_PIX_FMT_YUV422P10,
         AV_PIX_FMT_YUV444P10,
         AV_PIX_FMT_GBRP10,
         AV_PIX_FMT_NONE
     },
-    .priv_class     = &dnxhd_class,
+    .p.priv_class   = &dnxhd_class,
     .defaults       = dnxhd_defaults,
-    .profiles       = NULL_IF_CONFIG_SMALL(ff_dnxhd_profiles),
+    .p.profiles     = NULL_IF_CONFIG_SMALL(ff_dnxhd_profiles),
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };

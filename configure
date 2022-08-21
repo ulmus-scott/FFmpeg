@@ -2370,6 +2370,7 @@ HAVE_LIST="
     perl
     pod2man
     texi2html
+    xmllint
     zlib_gzip
 "
 
@@ -2949,7 +2950,7 @@ d3d11va_deps="dxva_h ID3D11VideoDecoder ID3D11VideoContext"
 dxva2_deps="dxva2api_h DXVA2_ConfigPictureDecode ole32 user32"
 ffnvcodec_deps_any="libdl LoadLibrary"
 nvdec_deps="ffnvcodec"
-vaapi_x11_deps="xlib"
+vaapi_x11_deps="xlib_x11"
 videotoolbox_hwaccel_deps="videotoolbox pthreads"
 videotoolbox_hwaccel_extralibs="-framework QuartzCore"
 vulkan_deps_any="libdl LoadLibrary"
@@ -3316,7 +3317,7 @@ libwebp_anim_encoder_deps="libwebp"
 libx262_encoder_deps="libx262"
 libx264_encoder_deps="libx264"
 libx264_encoder_select="atsc_a53"
-libx264rgb_encoder_deps="libx264 x264_csp_bgr"
+libx264rgb_encoder_deps="libx264"
 libx264rgb_encoder_select="libx264_encoder"
 libx265_encoder_deps="libx265"
 libxavs_encoder_deps="libxavs"
@@ -3471,7 +3472,7 @@ v4l2_outdev_suggest="libv4l2"
 vfwcap_indev_deps="vfw32 vfwcap_defines"
 xcbgrab_indev_deps="libxcb"
 xcbgrab_indev_suggest="libxcb_shm libxcb_shape libxcb_xfixes"
-xv_outdev_deps="xlib"
+xv_outdev_deps="xlib_xv xlib_x11 xlib_xext"
 
 # protocols
 async_protocol_deps="threads"
@@ -6136,7 +6137,6 @@ check_builtin MemoryBarrier windows.h "MemoryBarrier()"
 check_builtin sync_val_compare_and_swap "" "int *ptr; int oldval, newval; __sync_val_compare_and_swap(ptr, oldval, newval)"
 check_builtin gmtime_r time.h "time_t *time; struct tm *tm; gmtime_r(time, tm)"
 check_builtin localtime_r time.h "time_t *time; struct tm *tm; localtime_r(time, tm)"
-check_builtin x264_csp_bgr "stdint.h x264.h" "X264_CSP_BGR"
 
 case "$custom_allocator" in
     jemalloc)
@@ -6197,8 +6197,20 @@ check_func_headers windows.h SetDllDirectory
 check_func_headers windows.h Sleep
 check_func_headers windows.h VirtualAlloc
 check_func_headers glob.h glob
-enabled xlib &&
-    check_lib xlib "X11/Xlib.h X11/extensions/Xvlib.h" XvGetPortAttribute -lXv -lX11 -lXext
+
+if enabled xlib; then
+    check_pkg_config xlib_x11 x11 "X11/Xlib.h" XPending ||
+    check_lib xlib_x11 "X11/Xlib.h" XPending -lX11 ||
+        disable xlib
+
+    check_pkg_config xlib_xext xext "X11/Xlib.h X11/extensions/XShm.h" XShmAttach ||
+    check_lib xlib_xext "X11/Xlib.h X11/extensions/XShm.h" XShmAttach -lXext ||
+        disable xlib
+
+    check_pkg_config xlib_xv xv "X11/Xlib.h X11/extensions/Xvlib.h" XvGetPortAttribute ||
+    check_lib xlib_xv "X11/Xlib.h X11/extensions/Xvlib.h" XvGetPortAttribute -lXv ||
+        disable xlib
+fi
 
 check_headers direct.h
 check_headers dirent.h
@@ -6666,6 +6678,7 @@ disabled makeinfo_html && texi2html --help 2> /dev/null | grep -q 'init-file' &&
 perl -v            > /dev/null 2>&1 && enable perl      || disable perl
 pod2man --help     > /dev/null 2>&1 && enable pod2man   || disable pod2man
 rsync --help 2> /dev/null | grep -q 'contimeout' && enable rsync_contimeout || disable rsync_contimeout
+xmllint --version  > /dev/null 2>&1 && enable xmllint   || disable xmllint
 
 # check V4L2 codecs available in the API
 if enabled v4l2_m2m; then
@@ -6761,7 +6774,7 @@ enabled vaapi &&
 if enabled vaapi; then
     check_pkg_config vaapi_drm "libva-drm" "va/va_drm.h" vaGetDisplayDRM
 
-    if enabled xlib; then
+    if enabled xlib_x11; then
         check_pkg_config vaapi_x11 "libva-x11" "va/va_x11.h" vaGetDisplay
     fi
 
@@ -7429,6 +7442,7 @@ echo "perl enabled              ${perl-no}"
 echo "pod2man enabled           ${pod2man-no}"
 echo "makeinfo enabled          ${makeinfo-no}"
 echo "makeinfo supports HTML    ${makeinfo_html-no}"
+echo "xmllint enabled           ${xmllint-no}"
 test -n "$random_seed" &&
     echo "random seed               ${random_seed}"
 echo

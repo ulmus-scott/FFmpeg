@@ -101,9 +101,17 @@ void ff_command_queue_pop(AVFilterContext *filter)
     av_free(c);
 }
 
-int ff_append_pad(unsigned *count,
-                   AVFilterPad **pads, AVFilterLink ***links,
-                   AVFilterPad *newpad)
+/**
+ * Append a new pad.
+ *
+ * @param count  Pointer to the number of pads in the list
+ * @param pads   Pointer to the pointer to the beginning of the list of pads
+ * @param links  Pointer to the pointer to the beginning of the list of links
+ * @param newpad The new pad to add. A copy is made when adding.
+ * @return >= 0 in case of success, a negative AVERROR code on error
+ */
+static int append_pad(unsigned *count, AVFilterPad **pads,
+                      AVFilterLink ***links, AVFilterPad *newpad)
 {
     AVFilterLink **newlinks;
     AVFilterPad *newpads;
@@ -115,8 +123,11 @@ int ff_append_pad(unsigned *count,
         *pads  = newpads;
     if (newlinks)
         *links = newlinks;
-    if (!newpads || !newlinks)
+    if (!newpads || !newlinks) {
+        if (newpad->flags & AVFILTERPAD_FLAG_FREE_NAME)
+            av_freep(&newpad->name);
         return AVERROR(ENOMEM);
+    }
 
     memcpy(*pads + idx, newpad, sizeof(AVFilterPad));
     (*links)[idx] = NULL;
@@ -124,6 +135,28 @@ int ff_append_pad(unsigned *count,
     (*count)++;
 
     return 0;
+}
+
+int ff_append_inpad(AVFilterContext *f, AVFilterPad *p)
+{
+    return append_pad(&f->nb_inputs, &f->input_pads, &f->inputs, p);
+}
+
+int ff_append_inpad_free_name(AVFilterContext *f, AVFilterPad *p)
+{
+    p->flags |= AVFILTERPAD_FLAG_FREE_NAME;
+    return ff_append_inpad(f, p);
+}
+
+int ff_append_outpad(AVFilterContext *f, AVFilterPad *p)
+{
+    return append_pad(&f->nb_outputs, &f->output_pads, &f->outputs, p);
+}
+
+int ff_append_outpad_free_name(AVFilterContext *f, AVFilterPad *p)
+{
+    p->flags |= AVFILTERPAD_FLAG_FREE_NAME;
+    return ff_append_outpad(f, p);
 }
 
 int avfilter_link(AVFilterContext *src, unsigned srcpad,
@@ -538,6 +571,7 @@ int avfilter_process_command(AVFilterContext *filter, const char *cmd, const cha
     return AVERROR(ENOSYS);
 }
 
+#if FF_API_PAD_COUNT
 int avfilter_pad_count(const AVFilterPad *pads)
 {
     const AVFilter *filter;
@@ -554,7 +588,9 @@ int avfilter_pad_count(const AVFilterPad *pads)
     }
 
     av_assert0(!"AVFilterPad list not from a filter");
+    return AVERROR_BUG;
 }
+#endif
 
 unsigned avfilter_filter_pad_count(const AVFilter *filter, int is_output)
 {
@@ -734,9 +770,13 @@ void avfilter_free(AVFilterContext *filter)
 
     for (i = 0; i < filter->nb_inputs; i++) {
         free_link(filter->inputs[i]);
+        if (filter->input_pads[i].flags  & AVFILTERPAD_FLAG_FREE_NAME)
+            av_freep(&filter->input_pads[i].name);
     }
     for (i = 0; i < filter->nb_outputs; i++) {
         free_link(filter->outputs[i]);
+        if (filter->output_pads[i].flags & AVFILTERPAD_FLAG_FREE_NAME)
+            av_freep(&filter->output_pads[i].name);
     }
 
     if (filter->filter->priv_class)

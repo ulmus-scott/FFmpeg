@@ -2350,7 +2350,7 @@ static int matroska_parse_tracks(AVFormatContext *s)
         int extradata_size = 0;
         int extradata_offset = 0;
         uint32_t fourcc = 0;
-        AVIOContext b;
+        FFIOContext b;
         char* key_id_base64 = NULL;
         int bit_depth = -1;
 
@@ -2511,7 +2511,8 @@ static int matroska_parse_tracks(AVFormatContext *s)
             ffio_init_context(&b, track->codec_priv.data,
                               track->codec_priv.size,
                               0, NULL, NULL, NULL, NULL);
-            ret = ff_get_wav_header(s, &b, st->codecpar, track->codec_priv.size, 0);
+            ret = ff_get_wav_header(s, &b.pub, st->codecpar,
+                                    track->codec_priv.size, 0);
             if (ret < 0)
                 return ret;
             codec_id         = st->codecpar->codec_id;
@@ -2557,7 +2558,7 @@ static int matroska_parse_tracks(AVFormatContext *s)
                 ffio_init_context(&b, track->codec_priv.data,
                                   track->codec_priv.size,
                                   0, NULL, NULL, NULL, NULL);
-                if (ff_get_qtpalette(codec_id, &b, track->palette)) {
+                if (ff_get_qtpalette(codec_id, &b.pub, track->palette)) {
                     bit_depth &= 0x1F;
                     track->has_palette = 1;
                 }
@@ -2660,18 +2661,18 @@ static int matroska_parse_tracks(AVFormatContext *s)
                     codec_id == AV_CODEC_ID_ATRAC3 ||
                     codec_id == AV_CODEC_ID_SIPR)
                       && track->codec_priv.data) {
+            const uint8_t *ptr = track->codec_priv.data;
             int flavor;
 
-            ffio_init_context(&b, track->codec_priv.data,
-                              track->codec_priv.size,
-                              0, NULL, NULL, NULL, NULL);
-            avio_skip(&b, 22);
-            flavor                       = avio_rb16(&b);
-            track->audio.coded_framesize = avio_rb32(&b);
-            avio_skip(&b, 12);
-            track->audio.sub_packet_h    = avio_rb16(&b);
-            track->audio.frame_size      = avio_rb16(&b);
-            track->audio.sub_packet_size = avio_rb16(&b);
+            if (track->codec_priv.size < 46)
+                return AVERROR_INVALIDDATA;
+            ptr += 22;
+            flavor                       = bytestream_get_be16(&ptr);
+            track->audio.coded_framesize = bytestream_get_be32(&ptr);
+            ptr += 12;
+            track->audio.sub_packet_h    = bytestream_get_be16(&ptr);
+            track->audio.frame_size      = bytestream_get_be16(&ptr);
+            track->audio.sub_packet_size = bytestream_get_be16(&ptr);
             if (track->audio.coded_framesize <= 0 ||
                 track->audio.sub_packet_h    <= 0 ||
                 track->audio.frame_size      <= 0)
@@ -3587,7 +3588,7 @@ static int matroska_parse_block(MatroskaDemuxContext *matroska, AVBufferRef *buf
 {
     uint64_t timecode = AV_NOPTS_VALUE;
     MatroskaTrack *track;
-    AVIOContext pb;
+    FFIOContext pb;
     int res = 0;
     AVStream *st;
     int16_t block_time;
@@ -3598,7 +3599,7 @@ static int matroska_parse_block(MatroskaDemuxContext *matroska, AVBufferRef *buf
 
     ffio_init_context(&pb, data, size, 0, NULL, NULL, NULL, NULL);
 
-    if ((n = ebml_read_num(matroska, &pb, 8, &num, 1)) < 0)
+    if ((n = ebml_read_num(matroska, &pb.pub, 8, &num, 1)) < 0)
         return n;
     data += n;
     size -= n;
@@ -3656,7 +3657,7 @@ static int matroska_parse_block(MatroskaDemuxContext *matroska, AVBufferRef *buf
     }
 
     res = matroska_parse_laces(matroska, &data, size, (flags & 0x06) >> 1,
-                               &pb, lace_size, &laces);
+                               &pb.pub, lace_size, &laces);
     if (res < 0) {
         av_log(matroska->ctx, AV_LOG_ERROR, "Error parsing frame sizes.\n");
         return res;
@@ -3885,6 +3886,7 @@ static int matroska_read_close(AVFormatContext *s)
     return 0;
 }
 
+#if CONFIG_WEBM_DASH_MANIFEST_DEMUXER
 typedef struct {
     int64_t start_time_ns;
     int64_t end_time_ns;
@@ -4292,6 +4294,18 @@ static const AVClass webm_dash_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
+const AVInputFormat ff_webm_dash_manifest_demuxer = {
+    .name           = "webm_dash_manifest",
+    .long_name      = NULL_IF_CONFIG_SMALL("WebM DASH Manifest"),
+    .priv_class     = &webm_dash_class,
+    .priv_data_size = sizeof(MatroskaDemuxContext),
+    .flags_internal = FF_FMT_INIT_CLEANUP,
+    .read_header    = webm_dash_manifest_read_header,
+    .read_packet    = webm_dash_manifest_read_packet,
+    .read_close     = matroska_read_close,
+};
+#endif
+
 const AVInputFormat ff_matroska_demuxer = {
     .name           = "matroska,webm",
     .long_name      = NULL_IF_CONFIG_SMALL("Matroska / WebM"),
@@ -4304,15 +4318,4 @@ const AVInputFormat ff_matroska_demuxer = {
     .read_close     = matroska_read_close,
     .read_seek      = matroska_read_seek,
     .mime_type      = "audio/webm,audio/x-matroska,video/webm,video/x-matroska"
-};
-
-const AVInputFormat ff_webm_dash_manifest_demuxer = {
-    .name           = "webm_dash_manifest",
-    .long_name      = NULL_IF_CONFIG_SMALL("WebM DASH Manifest"),
-    .priv_data_size = sizeof(MatroskaDemuxContext),
-    .flags_internal = FF_FMT_INIT_CLEANUP,
-    .read_header    = webm_dash_manifest_read_header,
-    .read_packet    = webm_dash_manifest_read_packet,
-    .read_close     = matroska_read_close,
-    .priv_class     = &webm_dash_class,
 };

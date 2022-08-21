@@ -46,29 +46,32 @@
 #include "idctdsp.h"
 #include "mpeg12.h"
 #include "mpeg12data.h"
+#include "mpeg12enc.h"
 #include "mpegvideo.h"
 #include "mpegvideodata.h"
-#include "h261.h"
+#include "mpegvideoenc.h"
+#include "h261enc.h"
 #include "h263.h"
 #include "h263data.h"
+#include "h263enc.h"
 #include "mjpegenc_common.h"
 #include "mathops.h"
 #include "mpegutils.h"
 #include "mjpegenc.h"
 #include "speedhqenc.h"
-#include "msmpeg4.h"
+#include "msmpeg4enc.h"
 #include "pixblockdsp.h"
 #include "qpeldsp.h"
 #include "faandct.h"
-#include "thread.h"
 #include "aandcttab.h"
-#include "flv.h"
+#include "flvenc.h"
 #include "mpeg4video.h"
 #include "mpeg4videodata.h"
+#include "mpeg4videoenc.h"
 #include "internal.h"
 #include "bytestream.h"
-#include "wmv2.h"
-#include "rv10.h"
+#include "wmv2enc.h"
+#include "rv10enc.h"
 #include "packet_internal.h"
 #include <limits.h>
 #include "sp5x.h"
@@ -257,7 +260,6 @@ static void update_duplicate_context_after_me(MpegEncContext *dst,
     COPY(qscale);
     COPY(lambda);
     COPY(lambda2);
-    COPY(picture_in_gop_number);
     COPY(frame_pred_frame_dct); // FIXME don't set in encode_header
     COPY(progressive_frame);    // FIXME don't set in encode_header
     COPY(partitioned_frame);    // FIXME don't set in encode_header
@@ -813,12 +815,6 @@ av_cold int ff_mpv_encode_init(AVCodecContext *avctx)
     ff_pixblockdsp_init(&s->pdsp, avctx);
     ff_qpeldsp_init(&s->qdsp);
 
-    if (s->msmpeg4_version) {
-        int ac_stats_size = 2 * 2 * (MAX_LEVEL + 1) *  (MAX_RUN + 1) * 2 * sizeof(int);
-        if (!(s->ac_stats = av_mallocz(ac_stats_size)))
-            return AVERROR(ENOMEM);
-    }
-
     if (!(avctx->stats_out = av_mallocz(256))               ||
         !FF_ALLOCZ_TYPED_ARRAY(s->q_intra_matrix,          32) ||
         !FF_ALLOCZ_TYPED_ARRAY(s->q_chroma_intra_matrix,   32) ||
@@ -944,7 +940,6 @@ av_cold int ff_mpv_encode_end(AVCodecContext *avctx)
     ff_mpv_picture_free(avctx, &s->new_picture);
 
     av_freep(&avctx->stats_out);
-    av_freep(&s->ac_stats);
 
     if(s->q_chroma_intra_matrix   != s->q_intra_matrix  ) av_freep(&s->q_chroma_intra_matrix);
     if(s->q_chroma_intra_matrix16 != s->q_intra_matrix16) av_freep(&s->q_chroma_intra_matrix16);
@@ -1221,7 +1216,6 @@ static int encode_frame(AVCodecContext *c, AVFrame *frame, AVPacket *pkt)
 
 static int estimate_best_b_count(MpegEncContext *s)
 {
-    const AVCodec *codec = avcodec_find_encoder(s->avctx->codec_id);
     AVPacket *pkt;
     const int scale = s->brd_scale;
     int width  = s->width  >> scale;
@@ -1305,7 +1299,7 @@ static int estimate_best_b_count(MpegEncContext *s)
         c->time_base    = s->avctx->time_base;
         c->max_b_frames = s->max_b_frames;
 
-        ret = avcodec_open2(c, codec, NULL);
+        ret = avcodec_open2(c, s->avctx->codec, NULL);
         if (ret < 0)
             goto fail;
 
@@ -2439,8 +2433,6 @@ static inline void copy_context_before_encode(MpegEncContext *d, MpegEncContext 
     d->i_tex_bits= s->i_tex_bits;
     d->p_tex_bits= s->p_tex_bits;
     d->i_count= s->i_count;
-    d->f_count= s->f_count;
-    d->b_count= s->b_count;
     d->skip_count= s->skip_count;
     d->misc_bits= s->misc_bits;
     d->last_bits= 0;
@@ -2468,8 +2460,6 @@ static inline void copy_context_after_encode(MpegEncContext *d, MpegEncContext *
     d->i_tex_bits= s->i_tex_bits;
     d->p_tex_bits= s->p_tex_bits;
     d->i_count= s->i_count;
-    d->f_count= s->f_count;
-    d->b_count= s->b_count;
     d->skip_count= s->skip_count;
     d->misc_bits= s->misc_bits;
 
@@ -2773,8 +2763,6 @@ static int encode_thread(AVCodecContext *c, void *arg){
     s->i_tex_bits=0;
     s->p_tex_bits=0;
     s->i_count=0;
-    s->f_count=0;
-    s->b_count=0;
     s->skip_count=0;
 
     for(i=0; i<3; i++){
@@ -3404,8 +3392,6 @@ static void merge_context_after_encode(MpegEncContext *dst, MpegEncContext *src)
     MERGE(i_tex_bits);
     MERGE(p_tex_bits);
     MERGE(i_count);
-    MERGE(f_count);
-    MERGE(b_count);
     MERGE(skip_count);
     MERGE(misc_bits);
     MERGE(current_picture.encoding_error[0]);

@@ -47,6 +47,7 @@
 #include "mpegutils.h"
 #include "rectangle.h"
 #include "thread.h"
+#include "threadframe.h"
 
 static const uint8_t field_scan[16+1] = {
     0 + 0 * 4, 0 + 1 * 4, 1 + 0 * 4, 0 + 2 * 4,
@@ -192,17 +193,16 @@ static int alloc_picture(H264Context *h, H264Picture *pic)
     av_assert0(!pic->f->data[0]);
 
     pic->tf.f = pic->f;
-    ret = ff_thread_get_buffer(h->avctx, &pic->tf, pic->reference ?
-                                                   AV_GET_BUFFER_FLAG_REF : 0);
+    ret = ff_thread_get_ext_buffer(h->avctx, &pic->tf,
+                                   pic->reference ? AV_GET_BUFFER_FLAG_REF : 0);
     if (ret < 0)
         goto fail;
 
     if (pic->needs_fg) {
-        pic->tf_grain.f = pic->f_grain;
         pic->f_grain->format = pic->f->format;
         pic->f_grain->width = pic->f->width;
         pic->f_grain->height = pic->f->height;
-        ret = ff_thread_get_buffer(h->avctx, &pic->tf_grain, 0);
+        ret = ff_thread_get_buffer(h->avctx, pic->f_grain, 0);
         if (ret < 0)
             goto fail;
     }

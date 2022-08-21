@@ -20,7 +20,6 @@
 
 #include <float.h>
 
-#include "libavutil/audio_fifo.h"
 #include "libavutil/avstring.h"
 #include "libavutil/channel_layout.h"
 #include "libavutil/opt.h"
@@ -101,7 +100,6 @@ typedef struct AudioFFTDeNoiseContext {
     float   last_noise_balance;
     int64_t block_count;
 
-    int64_t pts;
     int     channels;
     int     sample_noise;
     int     sample_noise_start;
@@ -124,6 +122,8 @@ typedef struct AudioFFTDeNoiseContext {
 
     DeNoiseChannel *dnch;
 
+    AVFrame *winframe;
+
     double  max_gain;
     double  max_var;
     double  gain_scale;
@@ -138,8 +138,6 @@ typedef struct AudioFFTDeNoiseContext {
     double  vector_b[5];
     double  matrix_b[75];
     double  matrix_c[75];
-
-    AVAudioFifo *fifo;
 } AudioFFTDeNoiseContext;
 
 #define OFFSET(x) offsetof(AudioFFTDeNoiseContext, x)
@@ -147,20 +145,35 @@ typedef struct AudioFFTDeNoiseContext {
 #define AFR AV_OPT_FLAG_AUDIO_PARAM|AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_RUNTIME_PARAM
 
 static const AVOption afftdn_options[] = {
+    { "noise_reduction", "set the noise reduction",OFFSET(noise_reduction), AV_OPT_TYPE_FLOAT,{.dbl = 12},   .01, 97, AFR },
     { "nr", "set the noise reduction",    OFFSET(noise_reduction), AV_OPT_TYPE_FLOAT,  {.dbl = 12},          .01, 97, AFR },
+    { "noise_floor", "set the noise floor",OFFSET(noise_floor),    AV_OPT_TYPE_FLOAT,  {.dbl =-50},          -80,-20, AFR },
     { "nf", "set the noise floor",        OFFSET(noise_floor),     AV_OPT_TYPE_FLOAT,  {.dbl =-50},          -80,-20, AFR },
+    { "noise_type", "set the noise type", OFFSET(noise_type),      AV_OPT_TYPE_INT,    {.i64 = WHITE_NOISE}, WHITE_NOISE, NB_NOISE-1, AF, "type" },
     { "nt", "set the noise type",         OFFSET(noise_type),      AV_OPT_TYPE_INT,    {.i64 = WHITE_NOISE}, WHITE_NOISE, NB_NOISE-1, AF, "type" },
+    {  "white", "white noise",            0,                       AV_OPT_TYPE_CONST,  {.i64 = WHITE_NOISE},   0,  0, AF, "type" },
     {  "w", "white noise",                0,                       AV_OPT_TYPE_CONST,  {.i64 = WHITE_NOISE},   0,  0, AF, "type" },
+    {  "vinyl", "vinyl noise",            0,                       AV_OPT_TYPE_CONST,  {.i64 = VINYL_NOISE},   0,  0, AF, "type" },
     {  "v", "vinyl noise",                0,                       AV_OPT_TYPE_CONST,  {.i64 = VINYL_NOISE},   0,  0, AF, "type" },
+    {  "shellac", "shellac noise",        0,                       AV_OPT_TYPE_CONST,  {.i64 = SHELLAC_NOISE}, 0,  0, AF, "type" },
     {  "s", "shellac noise",              0,                       AV_OPT_TYPE_CONST,  {.i64 = SHELLAC_NOISE}, 0,  0, AF, "type" },
+    {  "custom", "custom noise",          0,                       AV_OPT_TYPE_CONST,  {.i64 = CUSTOM_NOISE},  0,  0, AF, "type" },
     {  "c", "custom noise",               0,                       AV_OPT_TYPE_CONST,  {.i64 = CUSTOM_NOISE},  0,  0, AF, "type" },
+    { "band_noise", "set the custom bands noise", OFFSET(band_noise_str),  AV_OPT_TYPE_STRING, {.str = 0},     0,  0, AF },
     { "bn", "set the custom bands noise", OFFSET(band_noise_str),  AV_OPT_TYPE_STRING, {.str = 0},             0,  0, AF },
+    { "residual_floor", "set the residual floor",OFFSET(residual_floor),  AV_OPT_TYPE_FLOAT, {.dbl =-38},    -80,-20, AFR },
     { "rf", "set the residual floor",     OFFSET(residual_floor),  AV_OPT_TYPE_FLOAT,  {.dbl =-38},          -80,-20, AFR },
+    { "track_noise", "track noise",       OFFSET(track_noise),     AV_OPT_TYPE_BOOL,   {.i64 =  0},            0,  1, AFR },
     { "tn", "track noise",                OFFSET(track_noise),     AV_OPT_TYPE_BOOL,   {.i64 =  0},            0,  1, AFR },
+    { "track_residuals", "track residual",OFFSET(track_residual),  AV_OPT_TYPE_BOOL,   {.i64 =  0},            0,  1, AFR },
     { "tr", "track residual",             OFFSET(track_residual),  AV_OPT_TYPE_BOOL,   {.i64 =  0},            0,  1, AFR },
+    { "output_mode", "set output mode",   OFFSET(output_mode),     AV_OPT_TYPE_INT,    {.i64 = OUT_MODE},      0,  NB_MODES-1, AFR, "mode" },
     { "om", "set output mode",            OFFSET(output_mode),     AV_OPT_TYPE_INT,    {.i64 = OUT_MODE},      0,  NB_MODES-1, AFR, "mode" },
+    {  "input", "input",                  0,                       AV_OPT_TYPE_CONST,  {.i64 = IN_MODE},       0,  0, AFR, "mode" },
     {  "i", "input",                      0,                       AV_OPT_TYPE_CONST,  {.i64 = IN_MODE},       0,  0, AFR, "mode" },
+    {  "output", "output",                0,                       AV_OPT_TYPE_CONST,  {.i64 = OUT_MODE},      0,  0, AFR, "mode" },
     {  "o", "output",                     0,                       AV_OPT_TYPE_CONST,  {.i64 = OUT_MODE},      0,  0, AFR, "mode" },
+    {  "noise", "noise",                  0,                       AV_OPT_TYPE_CONST,  {.i64 = NOISE_MODE},    0,  0, AFR, "mode" },
     {  "n", "noise",                      0,                       AV_OPT_TYPE_CONST,  {.i64 = NOISE_MODE},    0,  0, AFR, "mode" },
     { NULL }
 };
@@ -620,7 +633,6 @@ static int config_input(AVFilterLink *inlink)
     if (!s->dnch)
         return AVERROR(ENOMEM);
 
-    s->pts = AV_NOPTS_VALUE;
     s->channels = inlink->channels;
     s->sample_rate = inlink->sample_rate;
     s->sample_advance = s->sample_rate / 80;
@@ -831,6 +843,10 @@ static int config_input(AVFilterLink *inlink)
         }
     }
 
+    s->winframe = ff_get_audio_buffer(inlink, s->window_length);
+    if (!s->winframe)
+        return AVERROR(ENOMEM);
+
     wscale = sqrt(16.0 / (9.0 * s->fft_length));
     sum = 0.0;
     for (int i = 0; i < s->window_length; i++) {
@@ -856,10 +872,6 @@ static int config_input(AVFilterLink *inlink)
         s->noise_band_edge[16] = i;
     }
     s->noise_band_count = s->noise_band_edge[16];
-
-    s->fifo = av_audio_fifo_alloc(inlink->format, inlink->channels, s->fft_length);
-    if (!s->fifo)
-        return AVERROR(ENOMEM);
 
     return 0;
 }
@@ -1086,15 +1098,10 @@ static void set_noise_profile(AudioFFTDeNoiseContext *s,
         s->noise_floor = new_noise_floor;
 }
 
-typedef struct ThreadData {
-    AVFrame *in;
-} ThreadData;
-
 static int filter_channel(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
     AudioFFTDeNoiseContext *s = ctx->priv;
-    ThreadData *td = arg;
-    AVFrame *in = td->in;
+    AVFrame *in = arg;
     const int start = (in->channels * jobnr) / nb_jobs;
     const int end = (in->channels * (jobnr+1)) / nb_jobs;
 
@@ -1160,23 +1167,22 @@ static void get_auto_noise_levels(AudioFFTDeNoiseContext *s,
     }
 }
 
-static int output_frame(AVFilterLink *inlink)
+static int output_frame(AVFilterLink *inlink, AVFrame *in)
 {
     AVFilterContext *ctx = inlink->dst;
     AVFilterLink *outlink = ctx->outputs[0];
     AudioFFTDeNoiseContext *s = ctx->priv;
     const int output_mode = ctx->is_disabled ? IN_MODE : s->output_mode;
-    AVFrame *out = NULL, *in = NULL;
-    ThreadData td;
-    int ret = 0;
+    const int offset = s->window_length - s->sample_advance;
+    AVFrame *out;
 
-    in = ff_get_audio_buffer(outlink, s->window_length);
-    if (!in)
-        return AVERROR(ENOMEM);
+    for (int ch = 0; ch < s->channels; ch++) {
+        float *src = (float *)s->winframe->extended_data[ch];
 
-    ret = av_audio_fifo_peek(s->fifo, (void **)in->extended_data, s->window_length);
-    if (ret < 0)
-        goto end;
+        memmove(src, &src[s->sample_advance], offset * sizeof(float));
+        memcpy(&src[offset], in->extended_data[ch], in->nb_samples * sizeof(float));
+        memset(&src[offset + in->nb_samples], 0, (s->sample_advance - in->nb_samples) * sizeof(float));
+    }
 
     if (s->track_noise) {
         for (int ch = 0; ch < inlink->channels; ch++) {
@@ -1205,7 +1211,7 @@ static int output_frame(AVFilterLink *inlink)
         for (int ch = 0; ch < inlink->channels; ch++) {
             DeNoiseChannel *dnch = &s->dnch[ch];
 
-            sample_noise_block(s, dnch, in, ch);
+            sample_noise_block(s, dnch, s->winframe, ch);
         }
     }
 
@@ -1223,55 +1229,53 @@ static int output_frame(AVFilterLink *inlink)
     }
 
     s->block_count++;
-    td.in = in;
-    ff_filter_execute(ctx, filter_channel, &td, NULL,
+    ff_filter_execute(ctx, filter_channel, s->winframe, NULL,
                       FFMIN(outlink->channels, ff_filter_get_nb_threads(ctx)));
 
-    out = ff_get_audio_buffer(outlink, s->sample_advance);
-    if (!out) {
-        ret = AVERROR(ENOMEM);
-        goto end;
+    if (av_frame_is_writable(in)) {
+        out = in;
+    } else {
+        out = ff_get_audio_buffer(outlink, in->nb_samples);
+        if (!out) {
+            av_frame_free(&in);
+            return AVERROR(ENOMEM);
+        }
+
+        out->pts = in->pts;
     }
 
     for (int ch = 0; ch < inlink->channels; ch++) {
         DeNoiseChannel *dnch = &s->dnch[ch];
         double *src = dnch->out_samples;
-        float *orig = (float *)in->extended_data[ch];
+        const float *orig = (const float *)s->winframe->extended_data[ch];
         float *dst = (float *)out->extended_data[ch];
 
         switch (output_mode) {
         case IN_MODE:
-            for (int m = 0; m < s->sample_advance; m++)
+            for (int m = 0; m < out->nb_samples; m++)
                 dst[m] = orig[m];
             break;
         case OUT_MODE:
-            for (int m = 0; m < s->sample_advance; m++)
+            for (int m = 0; m < out->nb_samples; m++)
                 dst[m] = src[m];
             break;
         case NOISE_MODE:
-            for (int m = 0; m < s->sample_advance; m++)
+            for (int m = 0; m < out->nb_samples; m++)
                 dst[m] = orig[m] - src[m];
             break;
         default:
+            if (in != out)
+                av_frame_free(&in);
             av_frame_free(&out);
-            ret = AVERROR_BUG;
-            goto end;
+            return AVERROR_BUG;
         }
         memmove(src, src + s->sample_advance, (s->window_length - s->sample_advance) * sizeof(*src));
         memset(src + (s->window_length - s->sample_advance), 0, s->sample_advance * sizeof(*src));
     }
 
-    av_audio_fifo_drain(s->fifo, s->sample_advance);
-
-    out->pts = s->pts;
-    ret = ff_filter_frame(outlink, out);
-    if (ret < 0)
-        goto end;
-    s->pts += av_rescale_q(s->sample_advance, (AVRational){1, outlink->sample_rate}, outlink->time_base);
-end:
-    av_frame_free(&in);
-
-    return ret;
+    if (out != in)
+        av_frame_free(&in);
+    return ff_filter_frame(outlink, out);
 }
 
 static int activate(AVFilterContext *ctx)
@@ -1279,34 +1283,19 @@ static int activate(AVFilterContext *ctx)
     AVFilterLink *inlink = ctx->inputs[0];
     AVFilterLink *outlink = ctx->outputs[0];
     AudioFFTDeNoiseContext *s = ctx->priv;
-    AVFrame *frame = NULL;
+    AVFrame *in = NULL;
     int ret;
 
     FF_FILTER_FORWARD_STATUS_BACK(outlink, inlink);
 
-    ret = ff_inlink_consume_frame(inlink, &frame);
+    ret = ff_inlink_consume_samples(inlink, s->sample_advance, s->sample_advance, &in);
     if (ret < 0)
         return ret;
-
-    if (ret > 0) {
-        if (s->pts == AV_NOPTS_VALUE)
-            s->pts = frame->pts;
-
-        ret = av_audio_fifo_write(s->fifo, (void **)frame->extended_data, frame->nb_samples);
-        av_frame_free(&frame);
-        if (ret < 0)
-            return ret;
-    }
-
-    if (av_audio_fifo_size(s->fifo) >= s->window_length)
-        return output_frame(inlink);
+    if (ret > 0)
+        return output_frame(inlink, in);
 
     FF_FILTER_FORWARD_STATUS(inlink, outlink);
-    if (ff_outlink_frame_wanted(outlink) &&
-        av_audio_fifo_size(s->fifo) < s->window_length) {
-        ff_inlink_request_frame(inlink);
-        return 0;
-    }
+    FF_FILTER_FORWARD_WANTED(outlink, inlink);
 
     return FFERROR_NOT_READY;
 }
@@ -1319,6 +1308,7 @@ static av_cold void uninit(AVFilterContext *ctx)
     av_freep(&s->bin2band);
     av_freep(&s->band_alpha);
     av_freep(&s->band_beta);
+    av_frame_free(&s->winframe);
 
     if (s->dnch) {
         for (int ch = 0; ch < s->channels; ch++) {
@@ -1343,8 +1333,6 @@ static av_cold void uninit(AVFilterContext *ctx)
         }
         av_freep(&s->dnch);
     }
-
-    av_audio_fifo_free(s->fifo);
 }
 
 static int process_command(AVFilterContext *ctx, const char *cmd, const char *args,

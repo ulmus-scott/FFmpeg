@@ -55,7 +55,7 @@
  * infinitely over the time and is thus more scalable.
  */
 struct hist_entry {
-    int count;                      ///< how many times the corresponding value occurred
+    unsigned count;                 ///< how many times the corresponding value occurred
     double energy;                  ///< E = 10^((L + 0.691) / 10)
     double loudness;                ///< L = -0.691 + 10 * log10(E)
 };
@@ -279,6 +279,7 @@ static int config_video_output(AVFilterLink *outlink)
     int i, x, y;
     uint8_t *p;
     AVFilterContext *ctx = outlink->src;
+    AVFilterLink *inlink = ctx->inputs[0];
     EBUR128Context *ebur128 = ctx->priv;
     AVFrame *outpicref;
 
@@ -291,6 +292,8 @@ static int config_video_output(AVFilterLink *outlink)
     outlink->w = ebur128->w;
     outlink->h = ebur128->h;
     outlink->sample_aspect_ratio = (AVRational){1,1};
+    outlink->time_base = inlink->time_base;
+    outlink->frame_rate = av_make_q(10, 1);
 
 #define PAD 8
 
@@ -722,15 +725,15 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *insamples)
 #define I_GATE_THRES -10  // initially defined to -8 LU in the first EBU standard
 
             if (loudness_400 >= ABS_THRES) {
-                double integrated_sum = 0;
-                int nb_integrated = 0;
+                double integrated_sum = 0.0;
+                uint64_t nb_integrated = 0;
                 int gate_hist_pos = gate_update(&ebur128->i400, power_400,
                                                 loudness_400, I_GATE_THRES);
 
                 /* compute integrated loudness by summing the histogram values
                  * above the relative threshold */
                 for (i = gate_hist_pos; i < HIST_SIZE; i++) {
-                    const int nb_v = ebur128->i400.histogram[i].count;
+                    const unsigned nb_v = ebur128->i400.histogram[i].count;
                     nb_integrated  += nb_v;
                     integrated_sum += nb_v * ebur128->i400.histogram[i].energy;
                 }
@@ -751,18 +754,18 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *insamples)
             /* XXX: example code in EBU 3342 is ">=" but formula in BS.1770
              * specs is ">" */
             if (loudness_3000 >= ABS_THRES) {
-                int nb_powers = 0;
+                uint64_t nb_powers = 0;
                 int gate_hist_pos = gate_update(&ebur128->i3000, power_3000,
                                                 loudness_3000, LRA_GATE_THRES);
 
                 for (i = gate_hist_pos; i < HIST_SIZE; i++)
                     nb_powers += ebur128->i3000.histogram[i].count;
                 if (nb_powers) {
-                    int n, nb_pow;
+                    uint64_t n, nb_pow;
 
                     /* get lower loudness to consider */
                     n = 0;
-                    nb_pow = LRA_LOWER_PRC  * nb_powers / 100. + 0.5;
+                    nb_pow = LRA_LOWER_PRC * 0.01 * nb_powers + 0.5;
                     for (i = gate_hist_pos; i < HIST_SIZE; i++) {
                         n += ebur128->i3000.histogram[i].count;
                         if (n >= nb_pow) {
@@ -773,9 +776,9 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *insamples)
 
                     /* get higher loudness to consider */
                     n = nb_powers;
-                    nb_pow = LRA_HIGHER_PRC * nb_powers / 100. + 0.5;
+                    nb_pow = LRA_HIGHER_PRC * 0.01 * nb_powers + 0.5;
                     for (i = HIST_SIZE - 1; i >= 0; i--) {
-                        n -= ebur128->i3000.histogram[i].count;
+                        n -= FFMIN(n, ebur128->i3000.histogram[i].count);
                         if (n < nb_pow) {
                             ebur128->lra_high = ebur128->i3000.histogram[i].loudness;
                             break;
@@ -866,12 +869,17 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *insamples)
 
 #define SET_META_PEAK(name, ptype) do {                                     \
     if (ebur128->peak_mode & PEAK_MODE_ ## ptype ## _PEAKS) {               \
+        double max_peak = 0.0;                                              \
         char key[64];                                                       \
         for (ch = 0; ch < nb_channels; ch++) {                              \
             snprintf(key, sizeof(key),                                      \
                      META_PREFIX AV_STRINGIFY(name) "_peaks_ch%d", ch);     \
+            max_peak = fmax(max_peak, ebur128->name##_peaks[ch]);           \
             SET_META(key, ebur128->name##_peaks[ch]);                       \
         }                                                                   \
+        snprintf(key, sizeof(key),                                          \
+                 META_PREFIX AV_STRINGIFY(name) "_peak");                   \
+        SET_META(key, max_peak);                                            \
     }                                                                       \
 } while (0)
 

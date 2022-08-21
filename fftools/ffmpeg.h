@@ -307,6 +307,7 @@ typedef struct InputStream {
     int decoding_needed;     /* non zero if the packets must be decoded in 'raw_fifo', see DECODING_FOR_* */
 #define DECODING_FOR_OST    1
 #define DECODING_FOR_FILTER 2
+    int processing_needed;   /* non zero if the packets must be processed */
 
     AVCodecContext *dec_ctx;
     const AVCodec *dec;
@@ -534,6 +535,7 @@ typedef struct OutputStream {
     int inputs_done;
 
     const char *attachment_filename;
+    int seen_kf;
     int copy_initial_nonkeyframes;
     int copy_prior_start;
     char *disposition;

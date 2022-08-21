@@ -1167,7 +1167,9 @@ static void update_initial_durations(AVFormatContext *s, AVStream *st,
             (pktl->pkt.dts == AV_NOPTS_VALUE ||
              pktl->pkt.dts == st->internal->first_dts ||
              pktl->pkt.dts == RELATIVE_TS_BASE) &&
-            !pktl->pkt.duration) {
+            !pktl->pkt.duration &&
+            av_sat_add64(cur_dts, duration) == cur_dts + (uint64_t)duration
+        ) {
             pktl->pkt.dts = cur_dts;
             if (!st->internal->avctx->has_b_frames)
                 pktl->pkt.pts = cur_dts;
@@ -3903,7 +3905,9 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
                 break;
             }
             if (pkt->duration) {
-                if (avctx->codec_type == AVMEDIA_TYPE_SUBTITLE && pkt->pts != AV_NOPTS_VALUE && st->start_time != AV_NOPTS_VALUE && pkt->pts >= st->start_time) {
+                if (avctx->codec_type == AVMEDIA_TYPE_SUBTITLE && pkt->pts != AV_NOPTS_VALUE && st->start_time != AV_NOPTS_VALUE && pkt->pts >= st->start_time
+                    && (uint64_t)pkt->pts - st->start_time < INT64_MAX
+                ) {
                     st->internal->info->codec_info_duration = FFMIN(pkt->pts - st->start_time, st->internal->info->codec_info_duration + pkt->duration);
                 } else
                     st->internal->info->codec_info_duration += pkt->duration;

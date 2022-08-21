@@ -555,6 +555,9 @@ FF_DISABLE_DEPRECATION_WARNINGS
 FF_ENABLE_DEPRECATION_WARNINGS
 #endif
 
+    if (!avctx->bits_per_raw_sample)
+        avctx->bits_per_raw_sample = 8 * av_get_bytes_per_sample(avctx->sample_fmt);
+
     return 0;
 }
 
@@ -586,7 +589,7 @@ int ff_encode_preinit(AVCodecContext *avctx)
     if (avctx->codec_descriptor->props & AV_CODEC_PROP_INTRA_ONLY)
         avctx->internal->intra_only_flag = AV_PKT_FLAG_KEY;
 
-    if (ffcodec(avctx->codec)->cb.encode) {
+    if (ffcodec(avctx->codec)->cb_type == FF_CODEC_CB_TYPE_ENCODE) {
         avci->in_frame = av_frame_alloc();
         if (!avci->in_frame)
             return AVERROR(ENOMEM);

@@ -420,6 +420,19 @@ void avcodec_flush_buffers(AVCodecContext *avctx)
                    "that doesn't support it\n");
             return;
         }
+        if (avci->in_frame)
+            av_frame_unref(avci->in_frame);
+    } else {
+        av_packet_unref(avci->last_pkt_props);
+        while (av_fifo_read(avci->pkt_props, avci->last_pkt_props, 1) >= 0)
+            av_packet_unref(avci->last_pkt_props);
+
+        av_packet_unref(avci->in_pkt);
+
+        avctx->pts_correction_last_pts =
+        avctx->pts_correction_last_dts = INT64_MIN;
+
+        av_bsf_flush(avci->bsf);
     }
 
     avci->draining      = 0;
@@ -428,23 +441,10 @@ void avcodec_flush_buffers(AVCodecContext *avctx)
     av_frame_unref(avci->buffer_frame);
     av_packet_unref(avci->buffer_pkt);
 
-    av_packet_unref(avci->last_pkt_props);
-    while (av_fifo_read(avci->pkt_props, avci->last_pkt_props, 1) >= 0)
-        av_packet_unref(avci->last_pkt_props);
-
-    av_frame_unref(avci->in_frame);
-    av_packet_unref(avci->in_pkt);
-
     if (HAVE_THREADS && avctx->active_thread_type & FF_THREAD_FRAME)
         ff_thread_flush(avctx);
     else if (ffcodec(avctx->codec)->flush)
         ffcodec(avctx->codec)->flush(avctx);
-
-    avctx->pts_correction_last_pts =
-    avctx->pts_correction_last_dts = INT64_MIN;
-
-    if (avci->bsf)
-        av_bsf_flush(avci->bsf);
 }
 
 void avsubtitle_free(AVSubtitle *sub)
@@ -452,12 +452,15 @@ void avsubtitle_free(AVSubtitle *sub)
     int i;
 
     for (i = 0; i < sub->num_rects; i++) {
-        av_freep(&sub->rects[i]->data[0]);
-        av_freep(&sub->rects[i]->data[1]);
-        av_freep(&sub->rects[i]->data[2]);
-        av_freep(&sub->rects[i]->data[3]);
-        av_freep(&sub->rects[i]->text);
-        av_freep(&sub->rects[i]->ass);
+        AVSubtitleRect *const rect = sub->rects[i];
+
+        av_freep(&rect->data[0]);
+        av_freep(&rect->data[1]);
+        av_freep(&rect->data[2]);
+        av_freep(&rect->data[3]);
+        av_freep(&rect->text);
+        av_freep(&rect->ass);
+
         av_freep(&sub->rects[i]);
     }
 

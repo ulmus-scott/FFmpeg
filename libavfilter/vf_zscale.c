@@ -117,6 +117,7 @@ typedef struct ZScaleContext {
 
     void *tmp[MAX_THREADS]; //separate for each thread;
     int nb_threads;
+    int jobs_ret[MAX_THREADS];
 
     zimg_image_format src_format, dst_format;
     zimg_image_format alpha_src_format, alpha_dst_format;
@@ -631,7 +632,7 @@ static int graphs_build(AVFrame *in, AVFrame *out, const AVPixFmtDescriptor *des
     return 0;
 }
 
-static int realign_frame(const AVPixFmtDescriptor *desc, AVFrame **frame)
+static int realign_frame(const AVPixFmtDescriptor *desc, AVFrame **frame, int needs_copy)
 {
     AVFrame *aligned = NULL;
     int ret = 0, plane, planes;
@@ -653,10 +654,10 @@ static int realign_frame(const AVPixFmtDescriptor *desc, AVFrame **frame)
             if ((ret = av_frame_get_buffer(aligned, ZIMG_ALIGNMENT)) < 0)
                 goto fail;
 
-            if ((ret = av_frame_copy(aligned, *frame)) < 0)
+            if (needs_copy && (ret = av_frame_copy(aligned, *frame)) < 0)
                 goto fail;
 
-            if ((ret = av_frame_copy_props(aligned, *frame)) < 0)
+            if (needs_copy && (ret = av_frame_copy_props(aligned, *frame)) < 0)
                 goto fail;
 
             av_frame_free(frame);
@@ -785,9 +786,12 @@ static int filter_frame(AVFilterLink *link, AVFrame *in)
             goto fail;
         }
 
+        if ((ret = realign_frame(odesc, &out, 0)) < 0)
+            goto fail;
+
         av_frame_copy_props(out, in);
 
-        if ((ret = realign_frame(desc, &in)) < 0)
+        if ((ret = realign_frame(desc, &in, 1)) < 0)
             goto fail;
 
         snprintf(buf, sizeof(buf)-1, "%d", outlink->w);
@@ -799,7 +803,7 @@ static int filter_frame(AVFilterLink *link, AVFrame *in)
         link->dst->inputs[0]->w      = in->width;
         link->dst->inputs[0]->h      = in->height;
 
-        s->nb_threads = FFMIN(ff_filter_get_nb_threads(ctx), link->h / 8);
+        s->nb_threads = av_clip(FFMIN(ff_filter_get_nb_threads(ctx), FFMIN(link->h, outlink->h) / 8), 1, MAX_THREADS);
         s->in_colorspace = in->colorspace;
         s->in_trc = in->color_trc;
         s->in_primaries = in->color_primaries;
@@ -858,12 +862,14 @@ static int filter_frame(AVFilterLink *link, AVFrame *in)
         td.desc = desc;
         td.odesc = odesc;
 
-        ret = ff_filter_execute(ctx, filter_slice, &td, NULL, s->nb_threads);
-        if (ret < 0 || !s->graph[0]) {
+        memset(s->jobs_ret, 0, s->nb_threads * sizeof(*s->jobs_ret));
+        ret = ff_filter_execute(ctx, filter_slice, &td, s->jobs_ret, s->nb_threads);
+        for (int i = 0; ret >= 0 && i < s->nb_threads; i++)
+            if (s->jobs_ret[i] < 0)
+                ret = s->jobs_ret[i];
+        if (ret < 0) {
             av_frame_free(&in);
             av_frame_free(&out);
-            if (ret >= 0)
-                ret = AVERROR(EINVAL);
             return ret;
         }
 

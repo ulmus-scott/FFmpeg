@@ -22,6 +22,7 @@
 #include <stdint.h>
 
 #include "config.h"
+#include "config_components.h"
 
 #include "av1.h"
 #include "avc.h"
@@ -35,6 +36,7 @@
 #include "isom.h"
 #include "matroska.h"
 #include "riff.h"
+#include "version.h"
 #include "vorbiscomment.h"
 #include "wv.h"
 

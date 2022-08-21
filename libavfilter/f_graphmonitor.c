@@ -18,6 +18,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "config_components.h"
+
 #include "float.h"
 
 #include "libavutil/pixdesc.h"
@@ -226,7 +228,7 @@ static int draw_items(AVFilterContext *ctx, AVFrame *out,
         if (l->type == AVMEDIA_TYPE_VIDEO) {
             snprintf(buffer, sizeof(buffer)-1, " | size: %dx%d", l->w, l->h);
         } else if (l->type == AVMEDIA_TYPE_AUDIO) {
-            snprintf(buffer, sizeof(buffer)-1, " | channels: %d", l->channels);
+            snprintf(buffer, sizeof(buffer)-1, " | channels: %d", l->ch_layout.nb_channels);
         }
         drawtext(out, xpos, ypos, buffer, s->white);
         xpos += strlen(buffer) * 8;

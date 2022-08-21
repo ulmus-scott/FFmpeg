@@ -1730,6 +1730,7 @@ int ff_dca_lbr_filter_frame(DCALbrDecoder *s, AVFrame *frame)
     const int8_t *reorder;
     uint64_t channel_mask = channel_layouts[ch_conf];
 
+    nchannels = av_popcount64(channel_mask);
     avctx->sample_rate = s->sample_rate;
     avctx->sample_fmt = AV_SAMPLE_FMT_FLTP;
     avctx->bits_per_raw_sample = 0;
@@ -1745,13 +1746,6 @@ int ff_dca_lbr_filter_frame(DCALbrDecoder *s, AVFrame *frame)
 
     av_channel_layout_uninit(&avctx->ch_layout);
     av_channel_layout_from_mask(&avctx->ch_layout, channel_mask);
-#if FF_API_OLD_CHANNEL_LAYOUT
-FF_DISABLE_DEPRECATION_WARNINGS
-    avctx->channels = avctx->ch_layout.nb_channels;
-    avctx->channel_layout = avctx->ch_layout.order == AV_CHANNEL_ORDER_NATIVE ?
-                            avctx->ch_layout.u.mask : 0;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
 
     frame->nb_samples = 1024 << s->freq_range;
     if ((ret = ff_get_buffer(avctx, frame, 0)) < 0)

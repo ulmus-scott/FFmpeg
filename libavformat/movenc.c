@@ -21,6 +21,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "config_components.h"
+
 #include <stdint.h>
 #include <inttypes.h>
 
@@ -60,6 +62,7 @@
 #include "mov_chan.h"
 #include "movenc_ttml.h"
 #include "ttmlenc.h"
+#include "version.h"
 #include "vpcc.h"
 
 static const AVOption options[] = {

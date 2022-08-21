@@ -29,7 +29,9 @@
 #include <string.h>
 
 #include "libavformat/avformat.h"
+#include "libavformat/version.h"
 #include "libavcodec/avcodec.h"
+#include "libavcodec/version.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
 #include "libavutil/bprint.h"
@@ -51,9 +53,14 @@
 #include "libavutil/timecode.h"
 #include "libavutil/timestamp.h"
 #include "libavdevice/avdevice.h"
+#include "libavdevice/version.h"
 #include "libswscale/swscale.h"
+#include "libswscale/version.h"
 #include "libswresample/swresample.h"
+#include "libswresample/version.h"
 #include "libpostproc/postprocess.h"
+#include "libpostproc/version.h"
+#include "libavfilter/version.h"
 #include "cmdutils.h"
 
 #include "libavutil/thread.h"
@@ -2531,12 +2538,10 @@ static void show_frame(WriterContext *w, AVFrame *frame, AVStream *stream,
         if (s) print_str    ("sample_fmt", s);
         else   print_str_opt("sample_fmt", "unknown");
         print_int("nb_samples",         frame->nb_samples);
-        print_int("channels", frame->channels);
-        if (frame->channel_layout) {
-            av_bprint_clear(&pbuf);
-            av_bprint_channel_layout(&pbuf, frame->channels,
-                                     frame->channel_layout);
-            print_str    ("channel_layout", pbuf.str);
+        print_int("channels", frame->ch_layout.nb_channels);
+        if (frame->ch_layout.order != AV_CHANNEL_ORDER_UNSPEC) {
+            av_channel_layout_describe(&frame->ch_layout, val_str, sizeof(val_str));
+            print_str    ("channel_layout", val_str);
         } else
             print_str_opt("channel_layout", "unknown");
         break;
@@ -2948,12 +2953,11 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
         if (s) print_str    ("sample_fmt", s);
         else   print_str_opt("sample_fmt", "unknown");
         print_val("sample_rate",     par->sample_rate, unit_hertz_str);
-        print_int("channels",        par->channels);
+        print_int("channels",        par->ch_layout.nb_channels);
 
-        if (par->channel_layout) {
-            av_bprint_clear(&pbuf);
-            av_bprint_channel_layout(&pbuf, par->channels, par->channel_layout);
-            print_str    ("channel_layout", pbuf.str);
+        if (par->ch_layout.order != AV_CHANNEL_ORDER_UNSPEC) {
+            av_channel_layout_describe(&par->ch_layout, val_str, sizeof(val_str));
+            print_str    ("channel_layout", val_str);
         } else {
             print_str_opt("channel_layout", "unknown");
         }

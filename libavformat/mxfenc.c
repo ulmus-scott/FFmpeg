@@ -58,6 +58,7 @@
 #include "avc.h"
 #include "mxf.h"
 #include "config.h"
+#include "version.h"
 
 extern const AVOutputFormat ff_mxf_d10_muxer;
 extern const AVOutputFormat ff_mxf_opatom_muxer;
@@ -227,7 +228,8 @@ static const UID mxf_d10_container_uls[] = {
     { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x01,0x0D,0x01,0x03,0x01,0x02,0x01,0x06,0x01 }, // D-10 525/50 NTSC 30mb/s
 };
 
-static const uint8_t uuid_base[]            = { 0xAD,0xAB,0x44,0x24,0x2f,0x25,0x4d,0xc7,0x92,0xff,0x29,0xbd };
+static const uint8_t product_uid[]          = { 0xAD,0xAB,0x44,0x24,0x2f,0x25,0x4d,0xc7,0x92,0xff,0x29,0xbd,0x00,0x0c,0x00,0x02};
+static const uint8_t uuid_base[]            = { 0xAD,0xAB,0x44,0x24,0x2f,0x25,0x4d,0xc7,0x92,0xff };
 static const uint8_t umid_ul[]              = { 0x06,0x0A,0x2B,0x34,0x01,0x01,0x01,0x05,0x01,0x01,0x0D,0x00,0x13 };
 
 /**
@@ -424,9 +426,9 @@ typedef struct MXFContext {
 
 static void mxf_write_uuid(AVIOContext *pb, enum MXFMetadataSetType type, int value)
 {
-    avio_write(pb, uuid_base, 12);
+    avio_write(pb, uuid_base, 10);
     avio_wb16(pb, type);
-    avio_wb16(pb, value);
+    avio_wb32(pb, value);
 }
 
 static void mxf_write_umid(AVFormatContext *s, int type)
@@ -797,7 +799,7 @@ static void mxf_write_identification(AVFormatContext *s)
 
     // write product uid
     mxf_write_local_tag(s, 16, 0x3C05);
-    mxf_write_uuid(pb, Identification, 2);
+    avio_write(pb, product_uid, 16);
 
     // modification date
     mxf_write_local_tag(s, 8, 0x3C06);
@@ -1758,7 +1760,7 @@ static void mxf_write_index_table_segment(AVFormatContext *s)
 
     // instance id
     mxf_write_local_tag(s, 16, 0x3C0A);
-    mxf_write_uuid(pb, IndexTableSegment, 0);
+    mxf_write_uuid(pb, IndexTableSegment, mxf->last_indexed_edit_unit);
 
     // index edit rate
     mxf_write_local_tag(s, 8, 0x3F0B);

@@ -2291,12 +2291,12 @@ with @option{pad_len}.
 @item pad_dur
 Specify the duration of samples of silence to add. See
 @ref{time duration syntax,,the Time duration section in the ffmpeg-utils(1) manual,ffmpeg-utils}
-for the accepted syntax. Used only if set to non-zero value.
+for the accepted syntax. Used only if set to non-negative value.
 
 @item whole_dur
 Specify the minimum total duration in the output audio stream. See
 @ref{time duration syntax,,the Time duration section in the ffmpeg-utils(1) manual,ffmpeg-utils}
-for the accepted syntax. Used only if set to non-zero value. If the value is longer than
+for the accepted syntax. Used only if set to non-negative value. If the value is longer than
 the input audio length, silence is added to the end, until the value is reached.
 This option is mutually exclusive with @option{pad_dur}
 @end table
@@ -2304,6 +2304,9 @@ This option is mutually exclusive with @option{pad_dur}
 If neither the @option{pad_len} nor the @option{whole_len} nor @option{pad_dur}
 nor @option{whole_dur} option is set, the filter will add silence to the end of
 the input stream indefinitely.
+
+Note that for ffmpeg 4.4 and earlier a zero @option{pad_dur} or
+@option{whole_dur} also caused the filter to add silence indefinitely.
 
 @subsection Examples
 
@@ -8493,25 +8496,31 @@ This filter supports the all above options as @ref{commands}.
 
 @section colorkey
 RGB colorspace color keying.
+This filter operates on 8-bit RGB format frames by setting the alpha component of each pixel
+which falls within the similarity radius of the key color to 0. The alpha value for pixels outside
+the similarity radius depends on the value of the blend option.
 
 The filter accepts the following options:
 
 @table @option
 @item color
-The color which will be replaced with transparency.
+Set the color for which alpha will be set to 0 (full transparency).
+See @ref{color syntax,,"Color" section in the ffmpeg-utils manual,ffmpeg-utils}.
+Default is @code{black}.
 
 @item similarity
-Similarity percentage with the key color.
-
-0.01 matches only the exact key color, while 1.0 matches everything.
+Set the radius from the key color within which other colors also have full transparency.
+The computed distance is related to the unit fractional distance in 3D space between the RGB values
+of the key color and the pixel's color. Range is 0.01 to 1.0. 0.01 matches within a very small radius
+around the exact key color, while 1.0 matches everything.
+Default is @code{0.01}.
 
 @item blend
-Blend percentage.
-
-0.0 makes pixels either fully transparent, or not transparent at all.
-
-Higher values result in semi-transparent pixels, with a higher transparency
-the more similar the pixels color is to the key color.
+Set how the alpha value for pixels that fall outside the similarity radius is computed.
+0.0 makes pixels either fully transparent or fully opaque.
+Higher values result in semi-transparent pixels, with greater transparency
+the more similar the pixel color is to the key color.
+Range is 0.0 to 1.0. Default is @code{0.0}.
 @end table
 
 @subsection Examples
@@ -21805,6 +21814,11 @@ Set if input video is transposed. Boolean value, by default disabled.
 @item out_trans
 Set if output video needs to be transposed. Boolean value, by default disabled.
 
+@item h_offset
+@item v_offset
+Set output horizontal/vertical off-axis offset. Default is set to 0.
+Allowed range is from -1 to 1.
+
 @item alpha_mask
 Build mask in alpha plane for all unmapped pixels by marking them fully transparent. Boolean value, by default disabled.
 
@@ -25243,6 +25257,7 @@ ffplay -f lavfi life=s=300x200:mold=10:r=60:ratio=0.1:death_color=#C83232:life_c
 @anchor{allrgb}
 @anchor{allyuv}
 @anchor{color}
+@anchor{colorspectrum}
 @anchor{haldclutsrc}
 @anchor{nullsrc}
 @anchor{pal75bars}
@@ -25253,13 +25268,15 @@ ffplay -f lavfi life=s=300x200:mold=10:r=60:ratio=0.1:death_color=#C83232:life_c
 @anchor{testsrc}
 @anchor{testsrc2}
 @anchor{yuvtestsrc}
-@section allrgb, allyuv, color, haldclutsrc, nullsrc, pal75bars, pal100bars, rgbtestsrc, smptebars, smptehdbars, testsrc, testsrc2, yuvtestsrc
+@section allrgb, allyuv, color, colorspectrum, haldclutsrc, nullsrc, pal75bars, pal100bars, rgbtestsrc, smptebars, smptehdbars, testsrc, testsrc2, yuvtestsrc
 
 The @code{allrgb} source returns frames of size 4096x4096 of all rgb colors.
 
 The @code{allyuv} source returns frames of size 4096x4096 of all yuv colors.
 
 The @code{color} source provides an uniformly colored input.
+
+The @code{colorspectrum} source provides a color spectrum input.
 
 The @code{haldclutsrc} source provides an identity Hald CLUT. See also
 @ref{haldclut} filter.
@@ -25352,6 +25369,16 @@ Set the number of decimals to show in the timestamp, only available in the
 The displayed timestamp value will correspond to the original
 timestamp value multiplied by the power of 10 of the specified
 value. Default value is 0.
+
+@item type
+Set the type of the color spectrum, only available in the
+@code{colorspectrum} source. Can be one of the following:
+
+@table @samp
+@item black
+@item white
+@item all
+@end table
 @end table
 
 @subsection Examples
@@ -28356,6 +28383,9 @@ changed, so it will generate non monotonically increasing timestamps.
 Specifies the time difference between frames above which the point is
 considered a timestamp discontinuity which is removed by adjusting the later
 timestamps.
+
+@item dec_threads
+Specifies the number of threads for decoding
 @end table
 
 It allows overlaying a second video on top of the main input of

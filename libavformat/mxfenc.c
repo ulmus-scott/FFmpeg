@@ -2500,15 +2500,12 @@ static int mxf_init_timecode(AVFormatContext *s, AVStream *st, AVRational tbc)
         return av_timecode_init(&mxf->tc, av_inv_q(tbc), 0, 0, s);
 }
 
-static int mxf_write_header(AVFormatContext *s)
+static int mxf_init(AVFormatContext *s)
 {
     MXFContext *mxf = s->priv_data;
     int i, ret;
     uint8_t present[FF_ARRAY_ELEMS(mxf_essence_container_uls)] = {0};
     int64_t timestamp = 0;
-
-    if (!s->nb_streams)
-        return -1;
 
     if (s->oformat == &ff_mxf_opatom_muxer && s->nb_streams !=1) {
         av_log(s, AV_LOG_ERROR, "there must be exactly one stream for mxf opatom\n");
@@ -3248,7 +3245,7 @@ const AVOutputFormat ff_mxf_muxer = {
     .priv_data_size    = sizeof(MXFContext),
     .audio_codec       = AV_CODEC_ID_PCM_S16LE,
     .video_codec       = AV_CODEC_ID_MPEG2VIDEO,
-    .write_header      = mxf_write_header,
+    .init              = mxf_init,
     .write_packet      = mxf_write_packet,
     .write_trailer     = mxf_write_footer,
     .deinit            = mxf_deinit,
@@ -3264,7 +3261,7 @@ const AVOutputFormat ff_mxf_d10_muxer = {
     .priv_data_size    = sizeof(MXFContext),
     .audio_codec       = AV_CODEC_ID_PCM_S16LE,
     .video_codec       = AV_CODEC_ID_MPEG2VIDEO,
-    .write_header      = mxf_write_header,
+    .init              = mxf_init,
     .write_packet      = mxf_write_packet,
     .write_trailer     = mxf_write_footer,
     .deinit            = mxf_deinit,
@@ -3281,7 +3278,7 @@ const AVOutputFormat ff_mxf_opatom_muxer = {
     .priv_data_size    = sizeof(MXFContext),
     .audio_codec       = AV_CODEC_ID_PCM_S16LE,
     .video_codec       = AV_CODEC_ID_DNXHD,
-    .write_header      = mxf_write_header,
+    .init              = mxf_init,
     .write_packet      = mxf_write_packet,
     .write_trailer     = mxf_write_footer,
     .deinit            = mxf_deinit,

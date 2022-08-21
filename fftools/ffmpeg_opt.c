@@ -249,7 +249,7 @@ static int show_hwaccels(void *optctx, const char *opt, const char *arg)
 /* return a copy of the input with the stream specifiers removed from the keys */
 static AVDictionary *strip_specifiers(AVDictionary *dict)
 {
-    AVDictionaryEntry *e = NULL;
+    const AVDictionaryEntry *e = NULL;
     AVDictionary    *ret = NULL;
 
     while ((e = av_dict_get(dict, "", e, AV_DICT_IGNORE_SUFFIX))) {
@@ -875,6 +875,7 @@ static void add_input_streams(OptionsContext *o, AVFormatContext *ic)
         }
 
         ist->filter_in_rescale_delta_last = AV_NOPTS_VALUE;
+        ist->prev_pkt_pts = AV_NOPTS_VALUE;
 
         ist->dec_ctx = avcodec_alloc_context3(ist->dec);
         if (!ist->dec_ctx) {
@@ -887,6 +888,14 @@ static void add_input_streams(OptionsContext *o, AVFormatContext *ic)
             av_log(NULL, AV_LOG_ERROR, "Error initializing the decoder context.\n");
             exit_program(1);
         }
+
+        ist->decoded_frame = av_frame_alloc();
+        if (!ist->decoded_frame)
+            exit_program(1);
+
+        ist->filter_frame = av_frame_alloc();
+        if (!ist->filter_frame)
+            exit_program(1);
 
         ist->pkt = av_packet_alloc();
         if (!ist->pkt)
@@ -1073,7 +1082,7 @@ static void dump_attachment(AVStream *st, const char *filename)
 {
     int ret;
     AVIOContext *out = NULL;
-    AVDictionaryEntry *e;
+    const AVDictionaryEntry *e;
 
     if (!st->codecpar->extradata_size) {
         av_log(NULL, AV_LOG_WARNING, "No extradata to dump in stream #%d:%d.\n",
@@ -1109,7 +1118,7 @@ static int open_input_file(OptionsContext *o, const char *filename)
     int err, i, ret;
     int64_t timestamp;
     AVDictionary *unused_opts = NULL;
-    AVDictionaryEntry *e = NULL;
+    const AVDictionaryEntry *e = NULL;
     char *   video_codec_name = NULL;
     char *   audio_codec_name = NULL;
     char *subtitle_codec_name = NULL;
@@ -1519,6 +1528,10 @@ static OutputStream *new_output_stream(OptionsContext *o, AVFormatContext *oc, e
         av_log(NULL, AV_LOG_ERROR, "Error allocating the encoding parameters.\n");
         exit_program(1);
     }
+
+    ost->filtered_frame = av_frame_alloc();
+    if (!ost->filtered_frame)
+        exit_program(1);
 
     ost->pkt = av_packet_alloc();
     if (!ost->pkt)
@@ -2150,6 +2163,72 @@ static int copy_chapters(InputFile *ifile, OutputFile *ofile, int copy_metadata)
     return 0;
 }
 
+static int set_dispositions(OutputFile *of)
+{
+    int nb_streams[AVMEDIA_TYPE_NB]   = { 0 };
+    int have_default[AVMEDIA_TYPE_NB] = { 0 };
+    int have_manual = 0;
+
+    // first, copy the input dispositions
+    for (int i = 0; i< of->ctx->nb_streams; i++) {
+        OutputStream *ost = output_streams[of->ost_index + i];
+
+        nb_streams[ost->st->codecpar->codec_type]++;
+
+        have_manual |= !!ost->disposition;
+
+        if (ost->source_index >= 0) {
+            ost->st->disposition = input_streams[ost->source_index]->st->disposition;
+
+            if (ost->st->disposition & AV_DISPOSITION_DEFAULT)
+                have_default[ost->st->codecpar->codec_type] = 1;
+        }
+    }
+
+    if (have_manual) {
+        // process manually set dispositions - they override the above copy
+        for (int i = 0; i< of->ctx->nb_streams; i++) {
+            OutputStream *ost = output_streams[of->ost_index + i];
+            int ret;
+
+            if (!ost->disposition)
+                continue;
+
+#if LIBAVFORMAT_VERSION_MAJOR >= 60
+            ret = av_opt_set(ost->st, "disposition", ost->disposition, 0);
+#else
+            {
+                const AVClass *class = av_stream_get_class();
+                const AVOption    *o = av_opt_find(&class, "disposition", NULL, 0, AV_OPT_SEARCH_FAKE_OBJ);
+
+                av_assert0(o);
+                ret = av_opt_eval_flags(&class, o, ost->disposition, &ost->st->disposition);
+            }
+#endif
+
+            if (ret < 0)
+                return ret;
+        }
+    } else {
+        // For each media type with more than one stream, find a suitable stream to
+        // mark as default, unless one is already marked default.
+        // "Suitable" means the first of that type, skipping attached pictures.
+        for (int i = 0; i< of->ctx->nb_streams; i++) {
+            OutputStream *ost = output_streams[of->ost_index + i];
+            enum AVMediaType type = ost->st->codecpar->codec_type;
+
+            if (nb_streams[type] < 2 || have_default[type] ||
+                ost->st->disposition & AV_DISPOSITION_ATTACHED_PIC)
+                continue;
+
+            ost->st->disposition |= AV_DISPOSITION_DEFAULT;
+            have_default[type] = 1;
+        }
+    }
+
+    return 0;
+}
+
 static void init_output_filter(OutputFilter *ofilter, OptionsContext *o,
                                AVFormatContext *oc)
 {
@@ -2212,7 +2291,7 @@ static int open_output_file(OptionsContext *o, const char *filename)
     OutputStream *ost;
     InputStream  *ist;
     AVDictionary *unused_opts = NULL;
-    AVDictionaryEntry *e = NULL;
+    const AVDictionaryEntry *e = NULL;
 
     if (o->stop_time != INT64_MAX && o->recording_time != INT64_MAX) {
         o->stop_time = INT64_MAX;
@@ -2855,6 +2934,12 @@ loop_end:
             }
             av_dict_set(m, o->metadata[i].u.str, *val ? val : NULL, 0);
         }
+    }
+
+    err = set_dispositions(of);
+    if (err < 0) {
+        av_log(NULL, AV_LOG_FATAL, "Error setting output stream dispositions\n");
+        exit_program(1);
     }
 
     return 0;

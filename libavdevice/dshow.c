@@ -411,9 +411,9 @@ dshow_cycle_formats(AVFormatContext *avctx, enum dshowDeviceType devtype,
                 bih->biHeight = ctx->requested_height;
             }
         } else {
-            AUDIO_STREAM_CONFIG_CAPS *acaps = caps;
             WAVEFORMATEX *fx;
 #if DSHOWDEBUG
+            AUDIO_STREAM_CONFIG_CAPS *acaps = caps;
             ff_print_AUDIO_STREAM_CONFIG_CAPS(acaps);
 #endif
             if (IsEqualGUID(&type->formattype, &FORMAT_WaveFormatEx)) {
@@ -425,7 +425,7 @@ dshow_cycle_formats(AVFormatContext *avctx, enum dshowDeviceType devtype,
                 av_log(
                     avctx,
                     AV_LOG_INFO,
-                    "  ch=%2lu, bits=%2lu, rate=%6lu\n",
+                    "  ch=%2u, bits=%2u, rate=%6lu\n",
                     fx->nChannels, fx->wBitsPerSample, fx->nSamplesPerSec
                 );
                 continue;

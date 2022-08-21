@@ -1341,6 +1341,36 @@ Pass only noise.
 
 Default value is @var{output}.
 @end table
+
+@item adaptivity, ad
+Set the adaptivity factor, used how fast to adapt gains adjustments per
+each frequency bin. Value @var{0} enables instant adaptation, while higher values
+react much slower.
+Allowed range is from @var{0} to @var{1}. Default value is @var{0.5}.
+
+@item noise_link, nl
+Set the noise link used for multichannel audio.
+
+It accepts the following values:
+@table @option
+@item none
+Use unchanged channel's noise floor.
+
+@item min
+Use measured min noise floor of all channels.
+
+@item max
+Use measured max noise floor of all channels.
+
+@item average
+Use measured average noise floor of all channels.
+
+Default value is @var{min}.
+@end table
+
+@item band_multiplier, bm
+Set the band multiplier factor, used how much to spread bands across frequency bins.
+Allowed range is from @var{0.2} to @var{5}. Default value is @var{1.25}.
 @end table
 
 @subsection Commands
@@ -12288,7 +12318,9 @@ case of @code{b} it will use only bottom field.
 If line starts with @code{#} or @code{;} that line is skipped.
 
 @item mode
-Can be item @code{absolute} or @code{relative}. Default is @code{absolute}.
+Can be item @code{absolute} or @code{relative} or @code{pattern}. Default is @code{absolute}.
+The @code{pattern} mode is same as @code{relative} mode, except at last entry of file if there
+are more frames to process than @code{hint} file is seek back to start.
 @end table
 
 Example of first several lines of @code{hint} file for @code{relative} mode:

@@ -289,7 +289,7 @@ static const AVCodecHWConfigInternal *v4l2_m2m_hw_configs[] = {
     M2MDEC_CLASS(NAME) \
     const FFCodec ff_ ## NAME ## _v4l2m2m_decoder = { \
         .p.name         = #NAME "_v4l2m2m" , \
-        .p.long_name    = NULL_IF_CONFIG_SMALL("V4L2 mem2mem " LONGNAME " decoder wrapper"), \
+        CODEC_LONG_NAME("V4L2 mem2mem " LONGNAME " decoder wrapper"), \
         .p.type         = AVMEDIA_TYPE_VIDEO, \
         .p.id           = CODEC , \
         .priv_data_size = sizeof(V4L2m2mPriv), \

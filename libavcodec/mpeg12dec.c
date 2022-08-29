@@ -3053,7 +3053,7 @@ static av_cold int mpeg_decode_end(AVCodecContext *avctx)
 
 const FFCodec ff_mpeg1video_decoder = {
     .p.name                = "mpeg1video",
-    .p.long_name           = NULL_IF_CONFIG_SMALL("MPEG-1 video"),
+    CODEC_LONG_NAME("MPEG-1 video"),
     .p.type                = AVMEDIA_TYPE_VIDEO,
     .p.id                  = AV_CODEC_ID_MPEG1VIDEO,
     .priv_data_size        = sizeof(Mpeg1Context),
@@ -3085,7 +3085,7 @@ const FFCodec ff_mpeg1video_decoder = {
 
 const FFCodec ff_mpeg2video_decoder = {
     .p.name         = "mpeg2video",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("MPEG-2 video"),
+    CODEC_LONG_NAME("MPEG-2 video"),
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_MPEG2VIDEO,
     .priv_data_size = sizeof(Mpeg1Context),
@@ -3130,7 +3130,7 @@ const FFCodec ff_mpeg2video_decoder = {
 //legacy decoder
 const FFCodec ff_mpegvideo_decoder = {
     .p.name         = "mpegvideo",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("MPEG-1 video"),
+    CODEC_LONG_NAME("MPEG-1 video"),
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_MPEG2VIDEO,
     .priv_data_size = sizeof(Mpeg1Context),
@@ -3294,7 +3294,7 @@ static av_cold int ipu_decode_end(AVCodecContext *avctx)
 
 const FFCodec ff_ipu_decoder = {
     .p.name         = "ipu",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("IPU Video"),
+    CODEC_LONG_NAME("IPU Video"),
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_IPU,
     .priv_data_size = sizeof(IPUContext),

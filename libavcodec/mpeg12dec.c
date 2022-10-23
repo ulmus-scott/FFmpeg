@@ -2985,7 +2985,6 @@ static int mpeg_decode_frame(AVCodecContext *avctx, AVFrame *picture,
     }
 #endif
 
-    s2->codec_tag = ff_toupper4(avctx->codec_tag);
     if (s->mpeg_enc_ctx_allocated == 0 && (   s2->codec_tag == AV_RL32("VCR2")
                                            || s2->codec_tag == AV_RL32("BW10")
                                           ))

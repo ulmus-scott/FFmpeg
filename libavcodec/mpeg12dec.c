@@ -3050,6 +3050,7 @@ static void flush(AVCodecContext *avctx)
     s->sync       = 0;
     s->closed_gop = 0;
 
+    av_buffer_unref(&s->a53_buf_ref);
     ff_mpeg_flush(avctx);
 }
 

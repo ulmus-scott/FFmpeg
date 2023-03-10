@@ -622,12 +622,17 @@ typedef struct AVFrame {
      */
     int64_t best_effort_timestamp;
 
+#if FF_API_FRAME_PKT
     /**
      * reordered pos from the last AVPacket that has been input into the decoder
      * - encoding: unused
      * - decoding: Read by user.
+     * @deprecated use AV_CODEC_FLAG_COPY_OPAQUE to pass through arbitrary user
+     *             data from packets to frames
      */
+    attribute_deprecated
     int64_t pkt_pos;
+#endif
 
 #if FF_API_PKT_DURATION
     /**
@@ -687,14 +692,19 @@ typedef struct AVFrame {
     uint8_t scte_cc_buf[1024];
     int scte_cc_len;
 
+#if FF_API_FRAME_PKT
     /**
      * size of the corresponding packet containing the compressed
      * frame.
      * It is set to a negative value if unknown.
      * - encoding: unused
      * - decoding: set by libavcodec, read by user.
+     * @deprecated use AV_CODEC_FLAG_COPY_OPAQUE to pass through arbitrary user
+     *             data from packets to frames
      */
+    attribute_deprecated
     int pkt_size;
+#endif
 
     /**
      * For hwaccel-format frames, this should be a reference to the

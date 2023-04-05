@@ -2591,7 +2591,7 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
                 extract_extradata_check(st))
                 break;
             if (sti->first_dts == AV_NOPTS_VALUE &&
-                !(ic->iformat->flags & AVFMT_NOTIMESTAMPS) &&
+                (!(ic->iformat->flags & AVFMT_NOTIMESTAMPS) || sti->need_parsing == AVSTREAM_PARSE_FULL_RAW) &&
                 sti->codec_info_nb_frames < ((st->disposition & AV_DISPOSITION_ATTACHED_PIC) ? 1 : ic->max_ts_probe) &&
                 st->codecpar->codec_id != AV_CODEC_ID_DSMCC_B)
                  break;

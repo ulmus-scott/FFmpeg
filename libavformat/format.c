@@ -30,6 +30,7 @@
 #include "avformat.h"
 #include "id3v2.h"
 #include "internal.h"
+#include "url.h"
 
 /* MYTHTV CHANGES */
 extern AVInputFormat ff_mythtv_mpegts_demuxer;

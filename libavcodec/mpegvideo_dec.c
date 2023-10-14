@@ -235,12 +235,30 @@ int ff_mpv_common_frame_size_change(MpegEncContext *s)
     return err;
 }
 
-static int alloc_picture(MpegEncContext *s, Picture *pic)
+static int alloc_picture(MpegEncContext *s, Picture **picp, int reference)
 {
     AVCodecContext *avctx = s->avctx;
+    int idx = ff_find_unused_picture(s->avctx, s->picture, 0);
+    Picture *pic;
     int ret;
 
+    if (idx < 0)
+        return idx;
+
+    pic = &s->picture[idx];
+
     pic->tf.f = pic->f;
+    pic->reference = reference;
+
+    /* Myth Change - Begin */
+    /* Put ATSC captions cached from parse_user_data into the correct frame */
+    memcpy(pic->f->atsc_cc_buf, s->tmp_atsc_cc_buf, s->tmp_atsc_cc_len);
+    pic->f->atsc_cc_len = s->tmp_atsc_cc_len;
+    s->tmp_atsc_cc_len = 0;
+    memcpy(pic->f->scte_cc_buf, s->tmp_scte_cc_buf, s->tmp_scte_cc_len);
+    pic->f->scte_cc_len = s->tmp_scte_cc_len;
+    s->tmp_scte_cc_len = 0;
+    /* Myth Change - End */
 
     /* WM Image / Screen codecs allocate internal buffers with different
      * dimensions / colorspaces; ignore user-defined callbacks for these. */
@@ -248,7 +266,7 @@ static int alloc_picture(MpegEncContext *s, Picture *pic)
         avctx->codec_id != AV_CODEC_ID_VC1IMAGE  &&
         avctx->codec_id != AV_CODEC_ID_MSS2) {
         ret = ff_thread_get_ext_buffer(avctx, &pic->tf,
-                                       pic->reference ? AV_GET_BUFFER_FLAG_REF : 0);
+                                       reference ? AV_GET_BUFFER_FLAG_REF : 0);
     } else {
         pic->f->width  = avctx->width;
         pic->f->height = avctx->height;
@@ -262,9 +280,14 @@ static int alloc_picture(MpegEncContext *s, Picture *pic)
     if (ret < 0)
         goto fail;
 
-    return ff_alloc_picture(s->avctx, pic, &s->me, &s->sc, 0, s->out_format,
-                            s->mb_stride, s->mb_width, s->mb_height, s->b8_stride,
-                            &s->linesize, &s->uvlinesize);
+    ret = ff_alloc_picture(s->avctx, pic, &s->me, &s->sc, 0, s->out_format,
+                           s->mb_stride, s->mb_width, s->mb_height, s->b8_stride,
+                           &s->linesize, &s->uvlinesize);
+    if (ret < 0)
+        goto fail;
+    *picp = pic;
+
+    return 0;
 fail:
     ff_mpeg_unref_picture(pic);
     return ret;
@@ -272,26 +295,15 @@ fail:
 
 static int av_cold alloc_dummy_frame(MpegEncContext *s, Picture **picp)
 {
-    int idx = ff_find_unused_picture(s->avctx, s->picture, 0);
     Picture *pic;
-    int ret;
-
-    if (idx < 0)
-        return idx;
-
-    pic = &s->picture[idx];
-
-    pic->reference    = 3;
-    pic->f->pict_type = AV_PICTURE_TYPE_P;
-
-    ret = alloc_picture(s, pic);
+    int ret = alloc_picture(s, picp, 1);
     if (ret < 0)
         return ret;
 
+    pic = *picp;
+
     ff_thread_report_progress(&pic->tf, INT_MAX, 0);
     ff_thread_report_progress(&pic->tf, INT_MAX, 1);
-
-    *picp = pic;
 
     return 0;
 }
@@ -320,8 +332,7 @@ static void color_frame(AVFrame *frame, int luma)
  */
 int ff_mpv_frame_start(MpegEncContext *s, AVCodecContext *avctx)
 {
-    Picture *pic;
-    int idx, ret;
+    int ret;
 
     s->mb_skipped = 0;
 
@@ -351,33 +362,11 @@ int ff_mpv_frame_start(MpegEncContext *s, AVCodecContext *avctx)
     ff_mpeg_unref_picture(&s->last_picture);
     ff_mpeg_unref_picture(&s->next_picture);
 
-        idx = ff_find_unused_picture(s->avctx, s->picture, 0);
-        if (idx < 0) {
-            av_log(s->avctx, AV_LOG_ERROR, "no frame buffer available\n");
-            return idx;
-        }
-        pic = &s->picture[idx];
+    ret = alloc_picture(s, &s->current_picture_ptr,
+                        s->pict_type != AV_PICTURE_TYPE_B && !s->droppable);
+    if (ret < 0)
+        return ret;
 
-    pic->reference = 0;
-    if (!s->droppable) {
-        if (s->pict_type != AV_PICTURE_TYPE_B)
-            pic->reference = 3;
-    }
-
-    /* Myth Change - Begin */
-    /* Put ATSC captions cached from parse_user_data into the correct frame */
-    memcpy(pic->f->atsc_cc_buf, s->tmp_atsc_cc_buf, s->tmp_atsc_cc_len);
-    pic->f->atsc_cc_len = s->tmp_atsc_cc_len;
-    s->tmp_atsc_cc_len = 0;
-    memcpy(pic->f->scte_cc_buf, s->tmp_scte_cc_buf, s->tmp_scte_cc_len);
-    pic->f->scte_cc_len = s->tmp_scte_cc_len;
-    s->tmp_scte_cc_len = 0;
-    /* Myth Change - End */
-
-    if (alloc_picture(s, pic) < 0)
-        return -1;
-
-    s->current_picture_ptr = pic;
     s->current_picture_ptr->f->flags |= AV_FRAME_FLAG_TOP_FIELD_FIRST * !!s->top_field_first;
     s->current_picture_ptr->f->flags |= AV_FRAME_FLAG_INTERLACED * (!s->progressive_frame &&
                                                                     !s->progressive_sequence);

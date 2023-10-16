@@ -458,6 +458,7 @@ int ff_h264_update_thread_context(AVCodecContext *dst,
     h->poc.prev_frame_num        = h->poc.frame_num;
 
     h->recovery_frame        = h1->recovery_frame;
+    h->non_gray              = h1->non_gray;
 
     return err;
 }
@@ -1547,8 +1548,12 @@ static int h264_field_start(H264Context *h, const H264SliceContext *sl,
                               prev->f->width,
                               prev->f->height);
                 h->short_ref[0]->poc = prev->poc + 2U;
-            } else if (!h->frame_recovered && !h->avctx->hwaccel)
-                color_frame(h->short_ref[0]->f, c);
+                h->short_ref[0]->gray = prev->gray;
+            } else if (!h->frame_recovered) {
+                if (!h->avctx->hwaccel)
+                    color_frame(h->short_ref[0]->f, c);
+                h->short_ref[0]->gray = 1;
+            }
             h->short_ref[0]->frame_num = h->poc.prev_frame_num;
         }
     }
@@ -2005,6 +2010,19 @@ static int h264_slice_init(H264Context *h, H264SliceContext *sl,
         for (i = 16; i < 48; i++)
             ref2frm[i + 4] = 4 * id_list[(i - 16) >> 1] +
                              (sl->ref_list[j][i].reference & 3);
+    }
+
+    if (sl->slice_type_nos == AV_PICTURE_TYPE_I) {
+        h->cur_pic_ptr->gray = 0;
+        h->non_gray = 1;
+    } else {
+        int gray = 0;
+        for (j = 0; j < sl->list_count; j++) {
+            for (i = 0; i < sl->ref_count[j]; i++) {
+                gray |= sl->ref_list[j][i].parent->gray;
+            }
+        }
+        h->cur_pic_ptr->gray = gray;
     }
 
     if (h->avctx->debug & FF_DEBUG_PICT_INFO) {

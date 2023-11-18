@@ -806,6 +806,8 @@ int ff_mediacodec_dec_receive(AVCodecContext *avctx, MediaCodecDecContext *s,
         return AVERROR_EXTERNAL;
     }
 
+    if (s->draining && s->eos)
+        return AVERROR_EOF;
     return AVERROR(EAGAIN);
 }
 

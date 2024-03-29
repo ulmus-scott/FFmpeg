@@ -1457,7 +1457,7 @@ typedef struct AVFormatContext {
      *
      * @note this is \e not  used for determining the \ref AVInputFormat
      *       "input format"
-     * @sa format_probesize
+     * @see format_probesize
      */
     int64_t probesize;
 
@@ -1685,6 +1685,8 @@ typedef struct AVFormatContext {
      * Skip duration calcuation in estimate_timings_from_pts.
      * - encoding: unused
      * - decoding: set by user
+     *
+     * @see duration_probesize
      */
     int skip_estimate_duration_from_pts;
 
@@ -1747,7 +1749,7 @@ typedef struct AVFormatContext {
      *
      * Demuxing only, set by the caller before avformat_open_input().
      *
-     * @sa probesize
+     * @see probesize
      */
     int format_probesize;
 
@@ -1888,6 +1890,16 @@ typedef struct AVFormatContext {
      * @return 0 on success, a negative AVERROR code on failure
      */
     int (*io_close2)(struct AVFormatContext *s, AVIOContext *pb);
+
+    /**
+     * Maximum number of bytes read from input in order to determine stream durations
+     * when using estimate_timings_from_pts in avformat_find_stream_info().
+     * Demuxing only, set by the caller before avformat_find_stream_info().
+     * Can be set to 0 to let avformat choose using a heuristic.
+     *
+     * @see skip_estimate_duration_from_pts
+     */
+    int64_t duration_probesize;
 } AVFormatContext;
 
 /**

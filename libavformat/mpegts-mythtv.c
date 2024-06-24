@@ -47,6 +47,19 @@
 #include <iconv.h>
 #endif
 
+// MythTV only -----------------------------------------------------------------
+
+typedef struct SectionContext {
+    int pid;
+    int stream_type;
+    int new_packet;
+    MpegTSContext *ts;
+    AVFormatContext *stream;
+    AVStream *st;
+} SectionContext;
+
+// end MythTV only -------------------------------------------------------------
+
 /* maximum size in which we look for synchronization if
  * synchronization is lost */
 #define MAX_RESYNC_SIZE 65536
@@ -420,6 +433,9 @@ static int discard_pid(MpegTSContext *ts, unsigned int pid)
     return !used && discarded;
 }
 
+//ugly forward declaration
+static void mpegts_push_section(MpegTSFilter *filter, const uint8_t *section, int section_len);
+
 /**
  *  Assemble PES packets out of TS packets, and then call the "section_cb"
  *  function when they are complete.
@@ -445,6 +461,13 @@ static void write_section_data(MpegTSContext *ts, MpegTSFilter *tss1,
         memcpy(tss->section_buf + tss->section_index, buf, len);
         tss->section_index += len;
     }
+
+    // MythTV
+    if (tss->section_cb == mpegts_push_section) {
+        SectionContext *sect = tss->opaque;
+        sect->new_packet = 1;
+    }
+    // end MythTV
 
     offset = 0;
     cur_section_buf = tss->section_buf;
@@ -806,6 +829,7 @@ static const StreamType ISO_types[] = {
     { 0x02, AVMEDIA_TYPE_VIDEO, AV_CODEC_ID_MPEG2VIDEO },
     { 0x03, AVMEDIA_TYPE_AUDIO, AV_CODEC_ID_MP3        },
     { 0x04, AVMEDIA_TYPE_AUDIO, AV_CODEC_ID_MP3        },
+    { 0x0b, AVMEDIA_TYPE_DATA,  AV_CODEC_ID_DSMCC_B    }, /* STREAM_TYPE_DSMCC_B */
     { 0x0f, AVMEDIA_TYPE_AUDIO, AV_CODEC_ID_AAC        },
     { 0x10, AVMEDIA_TYPE_VIDEO, AV_CODEC_ID_MPEG4      },
     /* Makito encoder sets stream type 0x11 for AAC,
@@ -895,6 +919,7 @@ static const StreamType DESC_types[] = {
     { 0x6a, AVMEDIA_TYPE_AUDIO,    AV_CODEC_ID_AC3          }, /* AC-3 descriptor */
     { 0x7a, AVMEDIA_TYPE_AUDIO,    AV_CODEC_ID_EAC3         }, /* E-AC-3 descriptor */
     { 0x7b, AVMEDIA_TYPE_AUDIO,    AV_CODEC_ID_DTS          },
+    { 0x13, AVMEDIA_TYPE_DATA,     AV_CODEC_ID_DSMCC_B      }, /* DSMCC_CAROUSEL_IDENTIFIER_DESCRIPTOR */
     { 0x45, AVMEDIA_TYPE_DATA,     AV_CODEC_ID_DVB_VBI      }, /* VBI_DATA_DESCRIPTOR */
     { 0x46, AVMEDIA_TYPE_DATA,     AV_CODEC_ID_DVB_VBI      }, /* VBI_TELETEXT_DESCRIPTOR */
     { 0x56, AVMEDIA_TYPE_SUBTITLE, AV_CODEC_ID_DVB_TELETEXT },
@@ -2033,8 +2058,18 @@ int ff_mythtv_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stre
                 sti->request_probe = 50;
         }
         break;
+    case DATA_BROADCAST_ID_DESCRIPTOR:
+        st->data_id = get16(pp, desc_end);
+        break;
+    case DSMCC_CAROUSEL_IDENTIFIER_DESCRIPTOR:
+        st->carousel_id = get8(pp, desc_end) << 24 |
+                          get8(pp, desc_end) << 16 |
+                          get8(pp, desc_end) <<  8 |
+                          get8(pp, desc_end);
+        break;
     case 0x52: /* stream identifier descriptor */
         sti->stream_identifier = 1 + get8(pp, desc_end);
+        st->component_tag     = sti->stream_identifier - 1;
         break;
     case METADATA_DESCRIPTOR:
         if (get16(pp, desc_end) == 0xFFFF)
@@ -2326,6 +2361,34 @@ static int is_pes_stream(int stream_type, uint32_t prog_reg_desc)
 }
 
 // begin MythTV only -------------------------------------------------------
+static SectionContext *add_section_stream(MpegTSContext *ts, int pid, int stream_type)
+{
+    MpegTSFilter *tss = ts->pids[pid];
+    SectionContext *sect = 0;
+    if (tss) { /* filter already exists */
+        /* kill it, and start a new stream */
+        mpegts_close_filter(ts, tss);
+    }
+
+    /* create a SECTION context */
+    if (!(sect=av_mallocz(sizeof(SectionContext)))) {
+        av_log(ts, AV_LOG_ERROR, "Error: av_mallocz() failed in add_section_stream");
+        return 0;
+    }
+    sect->ts = ts;
+    sect->stream = ts->stream;
+    sect->pid = pid;
+    sect->stream_type = stream_type;
+    tss = mpegts_open_section_filter(ts, pid, mpegts_push_section, sect, 1);
+    if (!tss) {
+        av_free(sect);
+        av_log(ts, AV_LOG_ERROR, "Error: unable to open mpegts Section filter in add_section_stream");
+        return 0;
+    }
+
+    return sect;
+}
+
 /**
 @brief Copy PMT to AVFormatContext for use by MythTV.
 
@@ -2486,6 +2549,57 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
         stream_identifier = parse_stream_identifier_desc(p, p_end) + 1;
 
         /* now create stream */
+        // begin MythTV
+        if (stream_type == STREAM_TYPE_DSMCC_B)
+        {
+            SectionContext *sect = NULL;
+            int idx = -1;
+
+            if (ts->pids[pid] && ts->pids[pid]->type == MPEGTS_SECTION &&
+                ts->pids[pid]->u.section_filter.section_cb == mpegts_push_section) {
+                // u.section_filter.opaque may be the MpegTSContext, so test the section_cb
+                sect = (SectionContext*) ts->pids[pid]->u.section_filter.opaque;
+            }
+            if (!sect) {
+                sect = add_section_stream(ts, pid, stream_type);
+            }
+            if (!sect)
+            {
+                av_log(ts, AV_LOG_ERROR, "mpegts_add_stream: "
+                       "error creating Section context for pid 0x%x with type %i\n",
+                       pid, stream_type);
+                goto out;
+            }
+
+            idx = ff_find_stream_index(ts->stream, pid);
+            if (idx >= 0) {
+                st = ts->stream->streams[idx];
+                av_log(ts, AV_LOG_DEBUG, "mpegts_add_stream: "
+                   "reusing stream #%d, has id 0x%x and codec %s, type %s at 0x%p\n",
+                   st->index, st->id, avcodec_get_name(st->codecpar->codec_id),
+                   av_get_media_type_string(st->codecpar->codec_type), st);
+            }
+            if (!st) {
+                st = avformat_new_stream(sect->stream, NULL);
+            }
+            if (!st) {
+                goto out;
+            }
+            sect->st = st;
+            sect->st->id = sect->pid;
+
+            avpriv_set_pts_info(sect->st, 33, 1, 90000);
+
+            sect->st->codecpar->codec_type = AVMEDIA_TYPE_DATA;
+            sect->st->codecpar->codec_id   = AV_CODEC_ID_DSMCC_B;
+            sect->st->priv_data = sect;
+            ffstream(sect->st)->need_parsing = AVSTREAM_PARSE_NONE;
+
+            av_log(ts, AV_LOG_DEBUG, "mpegts_add_stream: "
+                   "stream #%d, has id 0x%x and codec %s, type %s at 0x%p\n",
+                   st->index, st->id, avcodec_get_name(st->codecpar->codec_id),
+                   av_get_media_type_string(st->codecpar->codec_type), st);
+        } else // end MythTV
         if (ts->pids[pid] && ts->pids[pid]->type == MPEGTS_PES) {
             pes = ts->pids[pid]->u.pes_filter.opaque;
             if (ts->merge_pmt_versions && !pes->st) {
@@ -2600,6 +2714,55 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
 out:
     for (i = 0; i < mp4_descr_count; i++)
         av_free(mp4_descr[i].dec_config_descr);
+}
+
+/* mpegts_push_section: return one or more tables.  The tables may not completely fill
+   the packet and there may be stuffing bytes at the end.
+   This is complicated because a single TS packet may result in several tables being
+   produced.  We may have a "start" bit indicating, in effect, the end of a table but
+   the rest of the TS packet after the start may be filled with one or more small tables.
+*/
+static void mpegts_push_section(MpegTSFilter *filter, const uint8_t *section, int section_len)
+{
+    SectionContext *sect = filter->u.section_filter.opaque;
+    MpegTSContext *ts = sect->ts;
+    SectionHeader header;
+    AVPacket *pkt = ts->pkt;
+    const uint8_t *p = section, *p_end = section + section_len - 4;
+
+    if (parse_section_header(&header, &p, p_end) < 0)
+    {
+        av_log(ts, AV_LOG_DEBUG, "Unable to parse header\n");
+        return;
+    }
+
+    if (sect->new_packet && pkt && sect->st && pkt->size == -1) {
+        int pktLen = section_len + 184; /* Add enough for a complete TS payload. */
+        sect->new_packet = 0;
+        av_packet_unref(pkt);
+        if (av_new_packet(pkt, pktLen) == 0) {
+            memcpy(pkt->data, section, section_len);
+            memset(pkt->data+section_len, 0xff, pktLen-section_len);
+            pkt->stream_index = sect->st->index;
+            ts->stop_parse = 1;
+        }
+    } else if (pkt->data) { /* We've already added at least one table. */
+        uint8_t *data = pkt->data;
+        int space = pkt->size;
+        int table_size = 0;
+        while (space > 3 + table_size) {
+            table_size = (((data[1] & 0xf) << 8) | data[2]) + 3;
+            if (table_size < space) {
+                space -= table_size;
+                data += table_size;
+            } /* Otherwise we've got filler. */
+        }
+        if (space < section_len) {
+            av_log(ts, AV_LOG_DEBUG, "Insufficient space for additional packet\n");
+            return;
+        }
+        memcpy(data, section, section_len);
+   }
 }
 
 static void pat_cb(MpegTSFilter *filter, const uint8_t *section, int section_len)

@@ -122,6 +122,7 @@
 #define STREAM_TYPE_AUDIO_MPEG2     0x04
 #define STREAM_TYPE_PRIVATE_SECTION 0x05
 #define STREAM_TYPE_PRIVATE_DATA    0x06
+#define STREAM_TYPE_DSMCC_B         0x0b
 #define STREAM_TYPE_AUDIO_AAC       0x0f
 #define STREAM_TYPE_AUDIO_AAC_LATM  0x11
 #define STREAM_TYPE_VIDEO_MPEG4     0x10
@@ -159,6 +160,7 @@
 #define VIDEO_STREAM_DESCRIPTOR      0x02
 #define REGISTRATION_DESCRIPTOR      0x05
 #define ISO_639_LANGUAGE_DESCRIPTOR  0x0a
+#define DSMCC_CAROUSEL_IDENTIFIER_DESCRIPTOR  0x13 // Defined in ISO/IEC 13818-6
 #define IOD_DESCRIPTOR               0x1d
 #define SL_DESCRIPTOR                0x1e
 #define FMC_DESCRIPTOR               0x1f
@@ -173,6 +175,7 @@
 #define STREAM_IDENTIFIER_DESCRIPTOR 0x52
 #define TELETEXT_DESCRIPTOR          0x56
 #define SUBTITLING_DESCRIPTOR        0x59
+#define DATA_BROADCAST_ID_DESCRIPTOR 0x66
 #define AC3_DESCRIPTOR               0x6A // AC-3_descriptor
 #define ENHANCED_AC3_DESCRIPTOR      0x7A // enhanced_AC-3_descriptor
 #define DTS_DESCRIPTOR               0x7B

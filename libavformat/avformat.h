@@ -2918,6 +2918,10 @@ int avformat_transfer_internal_stream_timing_info(const AVOutputFormat *ofmt,
  */
 AVRational av_stream_get_codec_timebase(const AVStream *st);
 
+/* MythTV changes */
+void av_remove_stream(AVFormatContext *s, int id, int remove_ts);
+/* End MythTV changes */
+
 /**
  * @}
  */

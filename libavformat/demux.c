@@ -690,6 +690,10 @@ static void compute_frame_duration(AVFormatContext *s, int *pnum, int *pden,
 
     *pnum = 0;
     *pden = 0;
+
+    if (!st || !st->codecpar)
+        return;
+
     switch (st->codecpar->codec_type) {
     case AVMEDIA_TYPE_VIDEO:
         if (st->r_frame_rate.num && (!pc || !codec_framerate.num)) {

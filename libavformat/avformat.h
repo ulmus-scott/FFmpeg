@@ -923,6 +923,12 @@ typedef struct AVStream {
      *
      */
     int pts_wrap_bits;
+
+    /* mythtv addons */
+    int component_tag; ///< Component tag given in PMT, for MythTV MHEG
+    int carousel_id;
+    int data_id;
+    /* end mythtv addons */
 } AVStream;
 
 /**

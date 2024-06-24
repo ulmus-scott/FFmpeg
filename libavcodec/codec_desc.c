@@ -3470,6 +3470,12 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .name      = "dvb_vbi",
         .long_name = NULL_IF_CONFIG_SMALL("dvb teletext"),
     },
+    {
+        .id        = AV_CODEC_ID_DSMCC_B,
+        .type      = AVMEDIA_TYPE_DATA,
+        .name      = "dsmcc_b",
+        .long_name = NULL_IF_CONFIG_SMALL("DSMCC B"),
+    },
 
     /* other kind of codecs and pseudo-codecs */
     {

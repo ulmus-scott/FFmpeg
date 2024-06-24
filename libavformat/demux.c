@@ -863,6 +863,9 @@ static void update_initial_timestamps(AVFormatContext *s, int stream_index,
 
     uint64_t shift;
 
+    if (!st)
+        return;
+
     if (sti->first_dts != AV_NOPTS_VALUE ||
         dts           == AV_NOPTS_VALUE ||
         sti->cur_dts   == AV_NOPTS_VALUE ||

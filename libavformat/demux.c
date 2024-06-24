@@ -613,6 +613,9 @@ FF_ENABLE_DEPRECATION_WARNINGS
         st  = s->streams[pkt->stream_index];
         sti = ffstream(st);
 
+        if (!st)
+            return -1;
+
         if (update_wrap_reference(s, st, pkt->stream_index, pkt) && sti->pts_wrap_behavior == AV_PTS_WRAP_SUB_OFFSET) {
             // correct first time stamps to negative values
             if (!is_relative(sti->first_dts))

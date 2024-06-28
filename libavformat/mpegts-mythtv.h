@@ -19,8 +19,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef AVFORMAT_MPEGTS_H
-#define AVFORMAT_MPEGTS_H
+#ifndef AVFORMAT_MPEGTS_MYTHTV_H
+#define AVFORMAT_MPEGTS_MYTHTV_H
 
 #include "avformat.h"
 
@@ -167,10 +167,10 @@
 
 typedef struct MpegTSContext MpegTSContext;
 
-MpegTSContext *avpriv_mpegts_parse_open(AVFormatContext *s);
-int avpriv_mpegts_parse_packet(MpegTSContext *ts, AVPacket *pkt,
-                               const uint8_t *buf, int len);
-void avpriv_mpegts_parse_close(MpegTSContext *ts);
+MpegTSContext *avpriv_mythtv_mpegts_parse_open(AVFormatContext *s);
+int avpriv_mythtv_mpegts_parse_packet(MpegTSContext *ts, AVPacket *pkt,
+                           const uint8_t *buf, int len);
+void avpriv_mythtv_mpegts_parse_close(MpegTSContext *ts);
 
 typedef struct SLConfigDescr {
     int use_au_start;
@@ -221,7 +221,7 @@ typedef struct DVBAC3Descriptor {
  * @param desc_list_end             End of buffer
  * @return <0 to stop processing
  */
-int ff_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type,
+int ff_mythtv_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type,
                               const uint8_t **pp, const uint8_t *desc_list_end,
                               Mp4Descr *mp4_descr, int mp4_descr_count, int pid,
                               MpegTSContext *ts);
@@ -232,4 +232,4 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type
  */
 int ff_check_h264_startcode(AVFormatContext *s, const AVStream *st, const AVPacket *pkt);
 
-#endif /* AVFORMAT_MPEGTS_H */
+#endif /* AVFORMAT_MPEGTS_MYTHTV_H */

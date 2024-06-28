@@ -1,6 +1,7 @@
 /*
  * MPEG-2 transport stream (aka DVB) demuxer
  * Copyright (c) 2002-2003 Fabrice Bellard
+ * Reworked for use with MythTV
  *
  * This file is part of FFmpeg.
  *
@@ -36,7 +37,7 @@
 #include "libavcodec/get_bits.h"
 #include "libavcodec/opus/opus.h"
 #include "avformat.h"
-#include "mpegts.h"
+#include "mpegts-mythtv.h"
 #include "internal.h"
 #include "avio_internal.h"
 #include "demux.h"
@@ -274,7 +275,7 @@ typedef struct PESContext {
     int merged_st;
 } PESContext;
 
-extern const FFInputFormat ff_mpegts_demuxer;
+extern const FFInputFormat ff_mythtv_mpegts_demuxer;
 
 static struct Program * get_program(MpegTSContext *ts, unsigned int programid)
 {
@@ -1810,7 +1811,7 @@ static const uint8_t opus_channel_map[8][8] = {
     { 0,6,1,2,3,4,5,7 },
 };
 
-int ff_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type,
+int ff_mythtv_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type,
                               const uint8_t **pp, const uint8_t *desc_list_end,
                               Mp4Descr *mp4_descr, int mp4_descr_count, int pid,
                               MpegTSContext *ts)
@@ -2514,7 +2515,7 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
         if (desc_list_end > p_end)
             goto out;
         for (;;) {
-            if (ff_parse_mpeg2_descriptor(ts->stream, st, stream_type, &p,
+            if (ff_mythtv_parse_mpeg2_descriptor(ts->stream, st, stream_type, &p,
                                           desc_list_end, mp4_descr,
                                           mp4_descr_count, pid, ts) < 0)
                 break;
@@ -3127,7 +3128,7 @@ static int mpegts_read_header(AVFormatContext *s)
     ts->stream     = s;
     ts->auto_guess = 0;
 
-    if (s->iformat == &ff_mpegts_demuxer.p) {
+    if (s->iformat == &ff_mythtv_mpegts_demuxer.p) {
         /* normal demux */
 
         /* first do a scan to get all the services */
@@ -3382,7 +3383,7 @@ static int64_t mpegts_get_dts(AVFormatContext *s, int stream_index,
 /**************************************************************/
 /* parsing functions - called from other demuxers such as RTP */
 
-MpegTSContext *avpriv_mpegts_parse_open(AVFormatContext *s)
+MpegTSContext *avpriv_mythtv_mpegts_parse_open(AVFormatContext *s)
 {
     MpegTSContext *ts;
 
@@ -3404,7 +3405,7 @@ MpegTSContext *avpriv_mpegts_parse_open(AVFormatContext *s)
 
 /* return the consumed length if a packet was output, or -1 if no
  * packet is output */
-int avpriv_mpegts_parse_packet(MpegTSContext *ts, AVPacket *pkt,
+int avpriv_mythtv_mpegts_parse_packet(MpegTSContext *ts, AVPacket *pkt,
                                const uint8_t *buf, int len)
 {
     int len1;
@@ -3429,13 +3430,13 @@ int avpriv_mpegts_parse_packet(MpegTSContext *ts, AVPacket *pkt,
     return len1 - len;
 }
 
-void avpriv_mpegts_parse_close(MpegTSContext *ts)
+void avpriv_mythtv_mpegts_parse_close(MpegTSContext *ts)
 {
     mpegts_free(ts);
     av_free(ts);
 }
 
-const FFInputFormat ff_mpegts_demuxer = {
+const FFInputFormat ff_mythtv_mpegts_demuxer = {
     .p.name         = "mpegts",
     .p.long_name    = NULL_IF_CONFIG_SMALL("MPEG-TS (MPEG-2 Transport Stream)"),
     .p.flags        = AVFMT_SHOW_IDS | AVFMT_TS_DISCONT,
@@ -3448,7 +3449,7 @@ const FFInputFormat ff_mpegts_demuxer = {
     .read_timestamp = mpegts_get_dts,
 };
 
-const FFInputFormat ff_mpegtsraw_demuxer = {
+const FFInputFormat ff_mythtv_mpegtsraw_demuxer = {
     .p.name         = "mpegtsraw",
     .p.long_name    = NULL_IF_CONFIG_SMALL("raw MPEG-TS (MPEG-2 Transport Stream)"),
     .p.flags        = AVFMT_SHOW_IDS | AVFMT_TS_DISCONT,

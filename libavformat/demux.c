@@ -1997,7 +1997,8 @@ static void estimate_timings(AVFormatContext *ic, int64_t old_offset)
     }
 
     if ((!strcmp(ic->iformat->name, "mpeg") ||
-         !strcmp(ic->iformat->name, "mpegts")) &&
+         !strcmp(ic->iformat->name, "mpegts") ||
+         !strcmp(ic->iformat->name, "mpegts-ffmpeg")) &&
         file_size && (ic->pb->seekable & AVIO_SEEKABLE_NORMAL)) {
         /* get accurate estimate from the PTSes */
         estimate_timings_from_pts(ic, old_offset);
@@ -2552,7 +2553,7 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
         max_subtitle_analyze_duration = 30*AV_TIME_BASE;
         if (!strcmp(ic->iformat->name, "flv"))
             max_stream_analyze_duration = 90*AV_TIME_BASE;
-        if (!strcmp(ic->iformat->name, "mpeg") || !strcmp(ic->iformat->name, "mpegts"))
+        if (!strcmp(ic->iformat->name, "mpeg") || !strcmp(ic->iformat->name, "mpegts") || !strcmp(ic->iformat->name, "mpegts-ffmpeg"))
             max_stream_analyze_duration = 7*AV_TIME_BASE;
     }
 

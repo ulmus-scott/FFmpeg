@@ -3436,7 +3436,7 @@ void avpriv_mpegts_parse_close(MpegTSContext *ts)
 }
 
 const FFInputFormat ff_mpegts_demuxer = {
-    .p.name         = "mpegts",
+    .p.name         = "mpegts-ffmpeg",
     .p.long_name    = NULL_IF_CONFIG_SMALL("MPEG-TS (MPEG-2 Transport Stream)"),
     .p.flags        = AVFMT_SHOW_IDS | AVFMT_TS_DISCONT,
     .p.priv_class   = &mpegts_class,
@@ -3449,7 +3449,7 @@ const FFInputFormat ff_mpegts_demuxer = {
 };
 
 const FFInputFormat ff_mpegtsraw_demuxer = {
-    .p.name         = "mpegtsraw",
+    .p.name         = "mpegtsraw-ffmpeg",
     .p.long_name    = NULL_IF_CONFIG_SMALL("raw MPEG-TS (MPEG-2 Transport Stream)"),
     .p.flags        = AVFMT_SHOW_IDS | AVFMT_TS_DISCONT,
     .p.priv_class   = &mpegtsraw_class,

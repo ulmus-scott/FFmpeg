@@ -2308,6 +2308,33 @@ static int is_pes_stream(int stream_type, uint32_t prog_reg_desc)
              (stream_type == 0x86 && prog_reg_desc == AV_RL32("CUEI")) );
 }
 
+// begin MythTV only -------------------------------------------------------
+/**
+@brief Copy PMT to AVFormatContext for use by MythTV.
+
+@param ctx          MpegTSContext.stream, assumed to be non-NULL
+@param section      Buffer to be duplicated
+@param section_len  Size in bytes of the buffer copied
+*/
+static void export_pmt(AVFormatContext *ctx, const uint8_t *section, int section_len)
+{
+    AVBufferRef *buf;
+    uint8_t* tmp = av_memdup(section, section_len);
+    if (!tmp)
+        return; // AVERROR(ENOMEM)
+
+    buf = av_buffer_create(tmp, section_len, av_buffer_default_free, NULL, AV_BUFFER_FLAG_READONLY);
+    // if creating the buffer fails, keep the previous PMT
+    if (!buf) {
+        av_freep(&tmp);
+        return; // AVERROR(ENOMEM)
+    }
+    av_buffer_replace(&ctx->pmt_section, buf);
+
+    av_buffer_unref(&buf);
+}
+// End MythTV only ------------------------------------------------------
+
 static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len)
 {
     MpegTSContext *ts = filter->u.section_filter.opaque;
@@ -2519,6 +2546,13 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
         }
         p = desc_list_end;
     }
+
+    // begin MythTV
+
+    /* cache pmt */
+    av_log(ts->stream, AV_LOG_TRACE, "exporting PMT\n");
+    export_pmt(ts->stream, section, section_len);
+    // end MythTV
 
     if (!ts->pids[pcr_pid])
         mpegts_open_pcr_filter(ts, pcr_pid);
@@ -3288,6 +3322,8 @@ static void mpegts_free(MpegTSContext *ts)
     for (i = 0; i < NB_PID_MAX; i++)
         if (ts->pids[i])
             mpegts_close_filter(ts, ts->pids[i]);
+
+    av_buffer_unref(&ts->stream->pmt_section); // MythTV
 }
 
 static int mpegts_read_close(AVFormatContext *s)

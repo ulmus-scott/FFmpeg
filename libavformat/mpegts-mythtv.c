@@ -884,6 +884,8 @@ static const StreamType DESC_types[] = {
     { 0x6a, AVMEDIA_TYPE_AUDIO,    AV_CODEC_ID_AC3          }, /* AC-3 descriptor */
     { 0x7a, AVMEDIA_TYPE_AUDIO,    AV_CODEC_ID_EAC3         }, /* E-AC-3 descriptor */
     { 0x7b, AVMEDIA_TYPE_AUDIO,    AV_CODEC_ID_DTS          },
+    { 0x45, AVMEDIA_TYPE_DATA,     AV_CODEC_ID_DVB_VBI      }, /* VBI_DATA_DESCRIPTOR */
+    { 0x46, AVMEDIA_TYPE_DATA,     AV_CODEC_ID_DVB_VBI      }, /* VBI_TELETEXT_DESCRIPTOR */
     { 0x56, AVMEDIA_TYPE_SUBTITLE, AV_CODEC_ID_DVB_TELETEXT },
     { 0x59, AVMEDIA_TYPE_SUBTITLE, AV_CODEC_ID_DVB_SUBTITLE }, /* subtitling descriptor */
     { 0 },
@@ -2027,6 +2029,15 @@ int ff_mythtv_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stre
         break;
     case 0x52: /* stream identifier descriptor */
         sti->stream_identifier = 1 + get8(pp, desc_end);
+        break;
+    case VBI_TELETEXT_DESCRIPTOR:
+        language[0] = get8(pp, desc_end);
+        language[1] = get8(pp, desc_end);
+        language[2] = get8(pp, desc_end);
+        language[3] = 0;
+
+        if (language[0])
+            av_dict_set(&st->metadata, "language", language, 0);
         break;
     case METADATA_DESCRIPTOR:
         if (get16(pp, desc_end) == 0xFFFF)

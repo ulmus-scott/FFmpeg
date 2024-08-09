@@ -2325,13 +2325,28 @@ static int is_pes_stream(int stream_type, uint32_t prog_reg_desc)
 @brief Copy PMT to AVFormatContext for use by MythTV.
 
 @param ctx          MpegTSContext.stream, assumed to be non-NULL
+@param program_number  AVProgram.id of program to update
 @param section      Buffer to be duplicated
 @param section_len  Size in bytes of the buffer copied
 */
-static void export_pmt(AVFormatContext *ctx, const uint8_t *section, int section_len)
+static void export_pmt(AVFormatContext *ctx, int program_number, const uint8_t *section, int section_len)
 {
-    AVBufferRef *buf;
-    uint8_t* tmp = av_memdup(section, section_len);
+    AVProgram* program = NULL;
+    uint8_t* tmp = NULL;
+    AVBufferRef *buf = NULL;
+
+    for (unsigned i = 0; i < ctx->nb_programs; i++)
+    {
+        if (ctx->programs[i]->id == program_number)
+        {
+            program = ctx->programs[i];
+            break;
+        }
+    }
+    if (program == NULL)
+        return;
+
+    tmp = av_memdup(section, section_len);
     if (!tmp)
         return; // AVERROR(ENOMEM)
 
@@ -2341,7 +2356,7 @@ static void export_pmt(AVFormatContext *ctx, const uint8_t *section, int section
         av_freep(&tmp);
         return; // AVERROR(ENOMEM)
     }
-    av_buffer_replace(&ctx->pmt_section, buf);
+    av_buffer_replace(&(program->pmt_section), buf);
 
     av_buffer_unref(&buf);
 }
@@ -2563,7 +2578,7 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
 
     /* cache pmt */
     av_log(ts->stream, AV_LOG_TRACE, "exporting PMT\n");
-    export_pmt(ts->stream, section, section_len);
+    export_pmt(ts->stream, h->id, section, section_len);
     // end MythTV
 
     if (!ts->pids[pcr_pid])
@@ -3343,7 +3358,8 @@ static void mpegts_free(MpegTSContext *ts)
         if (ts->pids[i])
             mpegts_close_filter(ts, ts->pids[i]);
 
-    av_buffer_unref(&ts->stream->pmt_section); // MythTV
+    for (i = 0; i < ts->stream->nb_programs; i++)
+        av_buffer_unref(&(ts->stream->programs[i]->pmt_section)); // MythTV
 }
 
 static int mpegts_read_close(AVFormatContext *s)

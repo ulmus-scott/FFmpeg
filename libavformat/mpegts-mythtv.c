@@ -35,7 +35,7 @@
 #include "libavcodec/bytestream.h"
 #include "libavcodec/defs.h"
 #include "libavcodec/get_bits.h"
-#include "libavcodec/opus.h"
+#include "libavcodec/opus/opus.h"
 #include "avformat.h"
 #include "mpegts-mythtv.h"
 #include "internal.h"

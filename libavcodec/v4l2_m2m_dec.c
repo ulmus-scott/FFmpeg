@@ -216,7 +216,16 @@ static av_cold int v4l2_decode_init(AVCodecContext *avctx)
      *   - the DRM frame format is passed in the DRM frame descriptor layer.
      *       check the v4l2_get_drm_frame function.
      */
-    switch (ff_get_format(avctx, avctx->codec->pix_fmts)) {
+    {
+    const enum AVPixelFormat *pix_fmts = NULL;
+    int num_pix_fmts = 0;
+    ret = avcodec_get_supported_config(avctx, NULL, AV_CODEC_CONFIG_PIX_FORMAT,
+                                       0, (const void **) &pix_fmts, &num_pix_fmts);
+    if (ret < 0)
+        return ret;
+    if (pix_fmts == NULL || num_pix_fmts < 1)
+        return -1;
+    switch (ff_get_format(avctx, pix_fmts)) {
     case AV_PIX_FMT_DRM_PRIME:
         s->output_drm = 1;
         break;
@@ -225,6 +234,7 @@ static av_cold int v4l2_decode_init(AVCodecContext *avctx)
         break;
     default:
         break;
+    }
     }
 
     s->device_ref = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_DRM);

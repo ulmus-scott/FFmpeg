@@ -585,6 +585,9 @@ static int handle_new_packet(AVFormatContext *s, AVPacket *pkt, int allow_passth
     st  = s->streams[pkt->stream_index];
     sti = ffstream(st);
 
+    if (!st)
+        return -1;
+
     update_timestamps(s, st, pkt);
 
     if (sti->request_probe <= 0 && allow_passthrough && !si->raw_packet_buffer.head)

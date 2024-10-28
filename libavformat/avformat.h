@@ -1433,6 +1433,12 @@ typedef struct AVFormatContext {
     unsigned int packet_size;
     int max_delay;
 
+    /* Myth addons */
+    /* mpeg-ts support */
+    void (*streams_changed)(void* stream_change_data, int avprogram_id);
+    void *stream_change_data;
+    /* End Myth addons */
+
     /**
      * Flags modifying the (de)muxer behaviour. A combination of AVFMT_FLAG_*.
      * Set by the user before avformat_open_input() / avformat_write_header().

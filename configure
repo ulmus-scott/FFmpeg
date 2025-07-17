@@ -4655,6 +4655,7 @@ add_sanitizers(){
     for sanitizer; do
         add_sanitizer_flags "$sanitizer"
     done
+    add_cflags -fno-omit-frame-pointer
 }
 
 case "$toolchain" in
@@ -6219,7 +6220,7 @@ set_default libdir
 set_default $PATHS_LIST
 set_default nm
 
-disabled optimizations || enabled ossfuzz || check_cflags -fomit-frame-pointer
+disabled optimizations || enabled ossfuzz || echo "$CFLAGS" | grep -q -- '-fsanitize=' || check_cflags -fomit-frame-pointer
 
 enable_weak_pic() {
     disabled pic && return

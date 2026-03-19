@@ -2576,6 +2576,46 @@ static int is_pmt_equal(const struct Program *new, const struct Program *old)
     }
     return i == new->nb_pids;
 }
+
+/**
+@brief Copy PMT to AVFormatContext for use by MythTV.
+
+@param ctx          MpegTSContext.stream, assumed to be non-NULL
+@param program_number  AVProgram.id of program to update
+@param section      Buffer to be duplicated
+@param section_len  Size in bytes of the buffer copied
+*/
+static void export_pmt(AVFormatContext *ctx, int program_number, const uint8_t *section, int section_len)
+{
+    AVProgram* program = NULL;
+    uint8_t* tmp = NULL;
+    AVBufferRef *buf = NULL;
+
+    for (unsigned i = 0; i < ctx->nb_programs; i++)
+    {
+        if (ctx->programs[i]->id == program_number)
+        {
+            program = ctx->programs[i];
+            break;
+        }
+    }
+    if (program == NULL)
+        return;
+
+    tmp = av_memdup(section, section_len);
+    if (!tmp)
+        return; // AVERROR(ENOMEM)
+
+    buf = av_buffer_create(tmp, section_len, av_buffer_default_free, NULL, AV_BUFFER_FLAG_READONLY);
+    // if creating the buffer fails, keep the previous PMT
+    if (!buf) {
+        av_freep(&tmp);
+        return; // AVERROR(ENOMEM)
+    }
+    av_buffer_replace(&(program->pmt_section), buf);
+
+    av_buffer_unref(&buf);
+}
 // End MythTV only ------------------------------------------------------
 
 static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len)
@@ -2792,6 +2832,11 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
     }
 
     // begin MythTV
+
+    /* cache pmt */
+    av_log(ts->stream, AV_LOG_TRACE, "exporting PMT\n");
+    export_pmt(ts->stream, h->id, section, section_len);
+
     /* if the pmt has changed, notify stream_changed listener */
     if (ts->stream->streams_changed != NULL && prg != NULL &&
         !is_pmt_equal(prg, &old_program))
@@ -3578,6 +3623,9 @@ static void mpegts_free(MpegTSContext *ts)
     for (i = 0; i < NB_PID_MAX; i++)
         if (ts->pids[i])
             mpegts_close_filter(ts, ts->pids[i]);
+
+    for (i = 0; i < ts->stream->nb_programs; i++)
+        av_buffer_unref(&(ts->stream->programs[i]->pmt_section)); // MythTV
 }
 
 static int mpegts_read_close(AVFormatContext *s)

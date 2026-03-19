@@ -894,6 +894,8 @@ static const StreamType DESC_types[] = {
     { AC3_DESCRIPTOR,           AVMEDIA_TYPE_AUDIO,    AV_CODEC_ID_AC3          },
     { ENHANCED_AC3_DESCRIPTOR,  AVMEDIA_TYPE_AUDIO,    AV_CODEC_ID_EAC3         },
     { DTS_DESCRIPTOR,           AVMEDIA_TYPE_AUDIO,    AV_CODEC_ID_DTS          },
+    { VBI_DATA_DESCRIPTOR,      AVMEDIA_TYPE_DATA,     AV_CODEC_ID_DVB_VBI      },
+    { VBI_TELETEXT_DESCRIPTOR,  AVMEDIA_TYPE_DATA,     AV_CODEC_ID_DVB_VBI      },
     { TELETEXT_DESCRIPTOR,      AVMEDIA_TYPE_SUBTITLE, AV_CODEC_ID_DVB_TELETEXT },
     { SUBTITLING_DESCRIPTOR,    AVMEDIA_TYPE_SUBTITLE, AV_CODEC_ID_DVB_SUBTITLE },
     { 0 },
@@ -2079,6 +2081,7 @@ int ff_parse_mpeg2_descriptor(AVFormatContext *fc, AVStream *st, int stream_type
             }
         }
         break;
+    case VBI_TELETEXT_DESCRIPTOR:
     case TELETEXT_DESCRIPTOR:
         {
             uint8_t *extradata = NULL;

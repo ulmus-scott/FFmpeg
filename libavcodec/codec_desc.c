@@ -3850,6 +3850,12 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .long_name = NULL_IF_CONFIG_SMALL("MXF SMPTE-436M ANC"),
     },
     {
+        .id        = AV_CODEC_ID_DVB_VBI,
+        .type      = AVMEDIA_TYPE_DATA,
+        .name      = "dvb_vbi",
+        .long_name = NULL_IF_CONFIG_SMALL("DVB VBI data"),
+    },
+    {
         .id        = AV_CODEC_ID_MPEG2TS,
         .type      = AVMEDIA_TYPE_DATA,
         .name      = "mpegts",

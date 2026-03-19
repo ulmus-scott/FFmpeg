@@ -1207,7 +1207,7 @@ typedef struct AVProgram {
 
     /**
      * A reference-counted buffer holding the last seen PMT in an MPEG-TS.
-     * Only set by mpegts-mythtv.
+     * Only set by mpegts.
      */
     AVBufferRef *pmt_section;
 

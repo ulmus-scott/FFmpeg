@@ -32,12 +32,6 @@
 #include "internal.h"
 #include "url.h"
 
-/* MYTHTV CHANGES */
-extern AVInputFormat ff_mythtv_mpegts_demuxer;
-extern AVInputFormat ff_mythtv_mpegtsraw_demuxer;
-extern AVInputFormat ff_mpegts_demuxer;
-extern AVInputFormat ff_mpegtsraw_demuxer;
-/* END MYTHTV CHANGES */
 
 /**
  * @file
@@ -231,19 +225,8 @@ const AVInputFormat *av_probe_input_format3(const AVProbeData *pd,
         if (score > score_max) {
             score_max = score;
             fmt       = fmt1;
-        } else if (score == score_max) {
-            // if the conflict is between Myth MPEGTS demux and FFMPEG's origin
-            // use mythtv's one
-            if ((fmt1 == &ff_mpegts_demuxer && fmt == &ff_mythtv_mpegts_demuxer) ||
-                (fmt == &ff_mpegts_demuxer && fmt1 == &ff_mythtv_mpegts_demuxer)) {
-                fmt = &ff_mythtv_mpegts_demuxer;
-            } else if ((fmt1 == &ff_mpegts_demuxer && fmt == &ff_mythtv_mpegtsraw_demuxer) ||
-                      (fmt == &ff_mpegts_demuxer && fmt1 == &ff_mythtv_mpegtsraw_demuxer)) {
-                fmt = &ff_mythtv_mpegtsraw_demuxer;
-            } else {
-                fmt = NULL;
-            }
-        }
+        } else if (score == score_max)
+            fmt = NULL;
     }
     if (nodat == ID3_GREATER_PROBE)
         score_max = FFMIN(AVPROBE_SCORE_EXTENSION / 2 - 1, score_max);

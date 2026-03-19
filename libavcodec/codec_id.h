@@ -597,6 +597,10 @@ enum AVCodecID {
     AV_CODEC_ID_ARIB_CAPTION,
     AV_CODEC_ID_IVTV_VBI,
 
+    /* MythTV */
+    /* DSMCC codec */
+    AV_CODEC_ID_DSMCC_B,
+
     /* other specific kind of codecs (generally used for attachments) */
     AV_CODEC_ID_FIRST_UNKNOWN = 0x18000,           ///< A dummy ID pointing at the start of various fake codecs.
     AV_CODEC_ID_TTF = 0x18000,
